@@ -1,0 +1,255 @@
+(() => {
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const norm = s => (s||'').toLowerCase().replace(/[\s\u00a0]+/g,'').trim();
+  const setReactInput = (el, value) => {
+    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+    setter.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  const realClick = el => {
+    const o = { bubbles: true, cancelable: true, view: window };
+    el.dispatchEvent(new PointerEvent('pointerdown', o));
+    el.dispatchEvent(new MouseEvent('mousedown', o));
+    el.dispatchEvent(new PointerEvent('pointerup', o));
+    el.dispatchEvent(new MouseEvent('mouseup', o));
+    el.dispatchEvent(new MouseEvent('click', o));
+  };
+  const waitFor = async (fn, { timeout = 20000, interval = 250 } = {}) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeout) { const v = fn(); if (v) return v; await sleep(interval); }
+    return null;
+  };
+  const findSearchInput = () => [...document.querySelectorAll('input[placeholder="Tìm kiếm..."]')].find(i => i.offsetParent !== null);
+  const findDetailLink = id => [...document.querySelectorAll('a[href^="/repair-orders/"]')].find(a => a.textContent.replace(/[#\s]/g,'') === id.replace(/[#\s]/g,''));
+  const findLogCpoCard = () => {
+    const h3 = [...document.querySelectorAll('h3')].find(h => h.textContent.trim().toLowerCase().includes('log cpo'));
+    return h3 ? h3.closest('.rounded-lg') : null;
+  };
+  const findEditBtn = () => [...document.querySelectorAll('button')].find(b => b.offsetParent !== null && !b.disabled && b.textContent.trim().toLowerCase() === 'chỉnh sửa');
+  const findControlByLabel = t => {
+    t = norm(t).replace(/[:*]/g,'');
+    const l = [...document.querySelectorAll('label')].find(x => norm(x.textContent).replace(/[:*]/g,'') === t);
+    return l ? l.parentElement.querySelector('[role="combobox"]') : null;
+  };
+  const getOpenCmdkPanel = () => [...document.querySelectorAll('[role="dialog"][data-state="open"]')].filter(p => p.offsetParent !== null && p.querySelector('[cmdk-root]')).pop();
+  const findActionButton = text => {
+    const t = text.toLowerCase();
+    const btns = [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null && !b.disabled);
+    return btns.find(b => [...b.querySelectorAll('span')].some(s => s.textContent.trim().toLowerCase() === t))
+        || btns.find(b => b.textContent.trim().toLowerCase() === t) || null;
+  };
+  // tìm nút action KỂ CẢ khi disabled (để phân biệt "không có" vs "có nhưng xám")
+  const findActionButtonAny = text => {
+    const t = text.toLowerCase();
+    return [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null)
+      .find(b => [...b.querySelectorAll('span')].some(s => s.textContent.trim().toLowerCase() === t) || b.textContent.trim().toLowerCase() === t) || null;
+  };
+  const readAlarmName = () => {
+    const lbl = [...document.querySelectorAll('span')].find(s => s.textContent.trim().replace(/:$/,'') === 'Tên cảnh báo CPO');
+    if (!lbl) return null;
+    return lbl.parentElement.querySelector('span:last-child')?.textContent.trim() || null;
+  };
+
+  const selectRadixOption = async (label, opt) => {
+    const c = findControlByLabel(label); if (!c) return false;
+    if (c.getAttribute('aria-expanded') !== 'true') { realClick(c); await sleep(300); }
+    const want = norm(opt);
+    const o = await waitFor(() => [...document.querySelectorAll('[role="option"]')].filter(x=>x.offsetParent!==null).find(x => norm(x.textContent) === want), { timeout: 4000, interval: 200 });
+    if (!o) { document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); return false; }
+    realClick(o); await sleep(250); return true;
+  };
+  const selectCmdkOption = async (label, opt) => {
+    const want = norm(opt);
+    const btn = findControlByLabel(label); if (!btn) return false;
+    if (btn.getAttribute('aria-expanded') !== 'true') { realClick(btn); await sleep(500); }
+    const search = getOpenCmdkPanel()?.querySelector('[cmdk-input]');
+    const countItems = () => (getOpenCmdkPanel()?.querySelectorAll('[cmdk-item],[role="option"]')||[]).length;
+    const before = countItems();
+    if (search) { search.focus(); setReactInput(search, opt); }
+    await waitFor(() => { const n = countItems(); return (search && n > 0 && n < before) || (n>0 && n <= 3) ? true : null; }, { timeout: 4000, interval: 150 });
+    await sleep(300);
+    let item = [...(getOpenCmdkPanel()?.querySelectorAll('[cmdk-item],[role="option"]')||[])].find(it => norm(it.textContent) === want);
+    if (!item && search) { setReactInput(search,''); await sleep(600);
+      item = [...(getOpenCmdkPanel()?.querySelectorAll('[cmdk-item],[role="option"]')||[])].find(it => norm(it.textContent) === want); }
+    if (!item) return false;
+    item.scrollIntoView({block:'nearest'}); item.dispatchEvent(new MouseEvent('mousemove',{bubbles:true})); await sleep(120);
+    realClick(item); await sleep(350);
+    let shown = btn.querySelector('span')?.textContent.trim();
+    if (shown && shown.toLowerCase().includes('chọn') && search) {
+      search.focus(); search.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,bubbles:true})); await sleep(300);
+    }
+    shown = btn.querySelector('span')?.textContent.trim();
+    return !(shown||'').toLowerCase().includes('chọn');
+  };
+  const isItemChecked = item => {
+    const c = item.querySelector('svg.lucide-check'); if (!c) return false;
+    if ((c.getAttribute('class')||'').includes('opacity-0')) return false;
+    return parseFloat(getComputedStyle(c).opacity||'0') > 0.5;
+  };
+  const multiSelectCmdk = async (label, wants) => {
+    const btn = findControlByLabel(label); if (!btn) return false;
+    if (btn.getAttribute('aria-expanded') !== 'true') { realClick(btn); await sleep(400); }
+    for (const w0 of wants) {
+      const w = norm(w0);
+      const item = await waitFor(() => [...(getOpenCmdkPanel()?.querySelectorAll('[cmdk-item],[role="option"]')||[])].find(it => norm(it.textContent) === w), { timeout: 4000, interval: 200 });
+      if (!item || isItemChecked(item)) continue;
+      item.scrollIntoView({block:'nearest'}); item.dispatchEvent(new MouseEvent('mousemove',{bubbles:true})); await sleep(80);
+      realClick(item); await sleep(250);
+    }
+    document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); await sleep(200);
+    return true;
+  };
+  const fillTextarea = async (ph, val) => {
+    const ta = [...document.querySelectorAll('textarea')].find(t => t.offsetParent !== null && (t.placeholder||'').toLowerCase().includes(ph.toLowerCase()));
+    if (!ta) return false; ta.focus(); setReactInput(ta, val); ta.dispatchEvent(new Event('blur',{bubbles:true})); return true;
+  };
+  const clickActionEl = async btn => { btn.scrollIntoView({block:'center'}); await sleep(200); realClick(btn); await sleep(500); };
+  const clickConfirmInDialog = async (text='Xác nhận') => {
+    const scope = [...document.querySelectorAll('[role="dialog"],[role="alertdialog"],[data-slot="dialog-content"]')].filter(d=>d.offsetParent!==null).pop() || document;
+    const t = text.toLowerCase();
+    const btn = await waitFor(() => [...scope.querySelectorAll('button')].filter(b=>b.offsetParent!==null&&!b.disabled).find(b=>b.textContent.trim().toLowerCase()===t), { timeout: 5000, interval: 200 });
+    if (!btn) return false; realClick(btn); await sleep(700); return true;
+  };
+  const goBackToList = async () => {
+    history.back();
+    await waitFor(() => findSearchInput(), { timeout: 8000 });
+    await sleep(800);
+  };
+
+  const SUA_DEFAULT = 'KTV kiểm tra, trụ đã xanh, hoạt động bình thường';
+  const HW_KHAC = ['Phần cứng','Khác'], KHAC = ['Khác'], HW = ['Phần cứng'];
+  const mk = (chiTietLoi, nhomXuLy, hanhDong, moTaLoi, moTaSua=SUA_DEFAULT) => ({
+    hinhThuc:'Tại trạm', phanLoai:'Sửa chữa', nhomLoi:'Trụ sạc OTĐ', chiTietLoi, nhomXuLy, hanhDong, moTaLoi, moTaSua,
+  });
+  const RAW = {
+    'AcContactorActionError':               mk('Lỗi AC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'Lỗi AC contactor', 'Trụ xanh hết lỗi'),
+    'Connector Temperature Failure':        mk('Lỗi trụ khác',     HW_KHAC, 'Khắc phục sự cố khác', 'Lỗi Connector Temperature Failure'),
+    'DC Contactor DcOutputContactorError':  mk('Lỗi DC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'DC Contactor DcOutputContactorError'),
+    'DCMeterDataMismatch':                  mk('Lỗi DC meter',     HW_KHAC, 'Khắc phục sự cố khác', 'DCMeterDataMismatch'),
+    'DoorAccessDetected':                   mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Lỗi mở cửa'),
+    'FanFailure':                           mk('Lỗi quạt làm mát', HW,      'Thay LK cơ khí',       'Lỗi quạt'),
+    'Flood Sensor Triggered':               mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Sensor lụt được kích hoạt'),
+    'HighTemperature':                      mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'HighTemperature'),
+    'Insulation Detector insulation error': mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Insulation Detector insulation error'),
+    'Không kết nối':                        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Không kết nối'),
+    'Link communication line error':        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Link communication line error'),
+    'No Power Module Found':                mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'No Power Module Found'),
+    'OverVoltage':                          mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'OverVoltage'),
+    'PeEarthFault':                         mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'PeEarthFault'),
+    'Power Module HighTemperature':         mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Power Module HighTemperature'),
+    'Power Module Check Group Error':       mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Power Module Check Group Error'),
+    'Power Module PFC':                     mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Power Module PFC'),
+    'PowerModuleCommunicationLoss':         mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'PowerModuleCommunicationLoss'),
+    'SupplyControllerCommunication':        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'SupplyControllerCommunication'),
+    'TamperDetection':                      mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'TamperDetection'),
+    'UnderVoltage':                         mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'UnderVoltage'),
+  };
+  const ALIAS = { 'Door Access Detected': 'DoorAccessDetected' };
+  const PRESETS = {};
+  for (const [k,v] of Object.entries(RAW))   PRESETS[norm(k)] = { ...v, _key:k };
+  for (const [a,t] of Object.entries(ALIAS)) PRESETS[norm(a)] = { ...RAW[t], _key:t };
+  const getPreset = name => name ? (PRESETS[norm(name)] || null) : null;
+
+  const processTicket = async id => {
+    console.log(`\n========== ${id} ==========`);
+    const inp = findSearchInput();
+    if (!inp) { console.error('❌ Không thấy ô search'); return 'ERR_SEARCH'; }
+    inp.focus(); setReactInput(inp, ''); await sleep(800);
+    setReactInput(inp, id);
+    inp.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true}));
+    const link = await waitFor(() => findDetailLink(id), { timeout: 10000 });
+    if (!link) { console.warn('⏭️ Không thấy ticket → SKIP'); return 'NOT_FOUND'; }
+    await sleep(300); realClick(link);
+    const ready = await waitFor(() => findLogCpoCard() || findEditBtn(), { timeout: 10000 });
+    if (!ready) { console.warn('⚠️ Chi tiết không load kịp → SKIP'); await goBackToList(); return 'DETAIL_TIMEOUT'; }
+    const statuses = await waitFor(() => {
+      const card = findLogCpoCard(); if (!card) return null;
+      const s = [...card.querySelectorAll('div')].map(d => d.textContent.trim().toUpperCase()).filter(t => ['OPEN','CLOSED','CLOSE'].includes(t));
+      return s.length ? s : null;
+    }, { timeout: 8000 });
+    await sleep(300);
+    const closed = statuses ? (statuses.includes('CLOSED') || statuses.includes('CLOSE')) : null;
+    console.log('📋 Log CPO:', statuses, '| CLOSED:', closed);
+    if (!closed) { console.log('⏭️ Không có CLOSED → SKIP'); await goBackToList(); return 'NO_CLOSED'; }
+    const alarmName = readAlarmName();
+    const P = getPreset(alarmName);
+    if (!P) { console.warn(`⏭️ Mã "${alarmName}" KHÔNG CÓ PRESET → SKIP`); await goBackToList(); return 'NO_PRESET:'+(alarmName||'?'); }
+    console.log(`🏷️ Mã: "${alarmName}" → preset: ${P._key}`);
+    if (!findActionButton('Sửa chữa')) { console.log('⏭️ Không có nút "Sửa chữa" (đã xử lý) → SKIP'); await goBackToList(); return 'SKIP_STATE'; }
+    const editBtn = findEditBtn();
+    if (!editBtn) { console.log('⏭️ Không có "Chỉnh sửa" → SKIP'); await goBackToList(); return 'NO_EDIT'; }
+    realClick(editBtn);
+    await waitFor(() => findControlByLabel('Hình thức xử lý'), { timeout: 8000 });
+    await sleep(500);
+    const abort = where => { console.error(`❌ Dừng tại: ${where} (form còn mở, xử lý tay)`); return 'ABORT:'+where; };
+    if (!await selectRadixOption('Hình thức xử lý', P.hinhThuc))   return abort('Hình thức xử lý');
+    if (!await selectRadixOption('Phân loại sửa chữa', P.phanLoai)) return abort('Phân loại sửa chữa');
+    if (!await selectCmdkOption('Nhóm lỗi', P.nhomLoi))            return abort('Nhóm lỗi');
+    if (!await selectCmdkOption('Chi tiết lỗi', P.chiTietLoi))     return abort('Chi tiết lỗi');
+    await multiSelectCmdk('Nhóm xử lý', P.nhomXuLy);
+    if (!await selectCmdkOption('Hành động xử lý', P.hanhDong))    return abort('Hành động xử lý');
+    await fillTextarea('Nhập mô tả chi tiết lỗi', P.moTaLoi);
+    await fillTextarea('Nhập mô tả chi tiết sửa chữa', P.moTaSua);
+    await sleep(300);
+    const upd = [...document.querySelectorAll('[data-slot="dialog-content"] button')].find(b => b.textContent.trim() === 'Cập nhật');
+    if (!upd) return abort('nút Cập nhật');
+    realClick(upd); await sleep(1500);
+    if ([...document.querySelectorAll('[data-slot="dialog-content"]')].some(d=>d.offsetParent!==null)) { console.error('⚠️ Dialog còn mở sau Cập nhật → DỪNG'); return 'UPDATE_FAIL'; }
+    await sleep(1500); // đợi trang ổn định sau Cập nhật
+
+    // Sửa chữa — retry click tới khi hộp thoại bật ra
+    const suaBtn = await waitFor(() => findActionButton('Sửa chữa'), { timeout: 6000 });
+    if (!suaBtn) return abort('nút Sửa chữa');
+    let dlgUp = false;
+    for (let i=0; i<4 && !dlgUp; i++) {
+      const b = findActionButton('Sửa chữa'); if (b) await clickActionEl(b);
+      dlgUp = !!(await waitFor(() => [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].some(d=>d.offsetParent!==null && !d.querySelector('[data-slot="dialog-content"] textarea')), { timeout: 1500, interval: 200 }));
+    }
+    if (!await clickConfirmInDialog('Xác nhận'))  return abort('Xác nhận (Sửa chữa)');
+    await sleep(2000);
+
+    // Hoàn công — nếu nút bị xám/không có → ghi log, KHÔNG dừng mẻ
+    const hcEnabled = await waitFor(() => findActionButton('Hoàn công'), { timeout: 6000 });
+    if (!hcEnabled) {
+      const hcAny = findActionButtonAny('Hoàn công');
+      const reason = hcAny ? 'nút Hoàn công bị XÁM (disabled)' : 'không thấy nút Hoàn công';
+      console.warn(`⚠️ ${id}: ${reason} → đã Sửa chữa, BỎ QUA Hoàn công`);
+      await goBackToList();
+      return 'STUCK_HOANCONG';
+    }
+    let hcDlg = false;
+    for (let i=0; i<4 && !hcDlg; i++) {
+      const b = findActionButton('Hoàn công'); if (b) await clickActionEl(b);
+      hcDlg = !!(await waitFor(() => [...document.querySelectorAll('[role="dialog"],[role="alertdialog"]')].some(d=>d.offsetParent!==null), { timeout: 1500, interval: 200 }));
+    }
+    if (!await clickConfirmInDialog('Xác nhận'))  return abort('Xác nhận (Hoàn công)');
+    await sleep(1500);
+
+    console.log(`✅✅ ${id} HOÀN TẤT`);
+    await goBackToList();
+    return 'DONE';
+  };
+  const runAll = async ids => {
+    const result = {};
+    for (const id of ids) {
+      const r = await processTicket(id);
+      result[id] = r;
+      // CHỈ dừng mẻ khi ABORT / UPDATE_FAIL. STUCK_HOANCONG thì chạy tiếp.
+      if ((typeof r === 'string' && r.startsWith('ABORT')) || r === 'UPDATE_FAIL') { console.error('🛑 DỪNG TOÀN BỘ để xử lý tay:', id); break; }
+      await sleep(1500);
+    }
+    console.log('\n===== KẾT QUẢ =====');
+    console.table(result);
+    // tóm tắt nhóm
+    const grp = {};
+    for (const [id,r] of Object.entries(result)) { const k=r.split(':')[0]; (grp[k]=grp[k]||[]).push(id); }
+    console.log('Tóm tắt:', Object.fromEntries(Object.entries(grp).map(([k,v])=>[k,v.length])));
+    window.__lastResult = result;
+    return result;
+  };
+
+  window.processTicket = processTicket;
+  window.runAll = runAll;
+  console.log('✅ Đã nạp v5 (Hoàn công xám → STUCK_HOANCONG, không dừng mẻ; retry click Sửa chữa).');
+})();

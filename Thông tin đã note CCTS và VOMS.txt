@@ -1,0 +1,127 @@
+# HỒ SƠ KỸ THUẬT — CCTS & VOMS
+> Dán file/đoạn này cho Claude ở đầu mỗi task để khỏi phải mô tả lại hệ thống.
+
+---
+
+## 1. CCTS — `console.cnpowercore.com`
+
+### API
+- **Base:** `https://cloud.cnpowercore.com:8091/ccts/`
+- **Method:** tất cả endpoint đều **POST**, `Content-Type: application/json`
+- **Auth:** cookie `ssoticket` → fetch phải có `credentials:'include'`
+- **token:** mỗi request body cần field `token`. Bắt **tự động** bằng cách hook `XMLHttpRequest.prototype.send` + `window.fetch` (không dán tay vì token dài + hết hạn).
+
+### Endpoint chính
+| Mục đích | Endpoint | Payload chính |
+|---|---|---|
+| List ticket | `cctsTicket/findCCTSTicket` | `page:{pageNum, pageSize:100}` + filter; phân trang dừng khi count không tăng |
+| Add problem analysis | `cctsTicketErrorAnalysis/addCCTSTicketErrorAnalysis` | `{reason, errorCategory, cctsTicketPks:[...], token}` |
+| Close (batch) | `cctsTicket/batchSubmitCloseRequest` | `{cctsTicketPks:[...], token}` |
+
+→ Cả analysis và close **nhận mảng nhiều PK một lần** (batch), không cần lặp.
+→ Close trả `{code:'201', success:true, message:"...wait for the administrator to confirm"}` = **đã gửi yêu cầu đóng, chờ admin duyệt** (không đóng ngay).
+
+### ⚠️ BUG CHÍNH XÁC ID (rất quan trọng)
+- ID 19 chữ số. **`cctsTicketId`** (hiển thị/search trên UI) bị **làm tròn double**: đuôi `...001` → `...000`. Không phải PK thật.
+- Chỉ **`cctsTicketPk` (= `ticketPk`)** mới là PK thật để gọi API.
+- Phải đọc **`response.text()`**, KHÔNG `JSON.parse` / `response.json()` (parse là mất chính xác ngay).
+- Tách text theo từng object (split trên `"cctsTicketPk":`), regex moi **đúng field** cho từng object → tránh lệch cặp giữa các ticket.
+- Map list của QuVi (là `cctsTicketId`) → PK thật bằng cặp `(cctsTicketId → cctsTicketPk)` trong cùng object. **Đừng dùng `Number()`** (gây ambiguous vì `...000` và `...001` ra cùng số).
+- UI search cũng bị làm tròn → **không tin search UI để verify ID**.
+
+### Tiêu chí auto-close (`ccts-auto-close.js`)
+Ticket đủ điều kiện tự đóng khi **TẤT CẢ**:
+- `errorCode` ∈ {`C2405`, `CONNECTION_LOST`, `C0410`}
+- `cctsTicketStatus` = `"Pending for local team close"`
+- `ticketCreator` = `"VOMS"`
+- `slaTimeout` = `0` (so sánh dạng **string `"0"`** sau regex; = ontime)
+
+Problem analysis dùng:
+- `errorCategory = "Others/Error recover by it self"`
+- `reason = "KTV kiểm tra, trụ xanh hoạt động bình thường"`
+
+PHASE trong script: `recover` (chỉ in bảng preview) / `analysis` / `close` / `analysis_close`.
+Quy trình chạy: mở trang list (để bắt token) → dán script → xem bảng `recover` → đổi PHASE → chạy.
+
+### Các script CCTS đã có
+- **`ccts-auto-close.js`** — auto filter + analysis + close theo 4 tiêu chí trên.
+- **`ccts-close-fac.js`** — đóng ticket FAC end-to-end; loại tỉnh **HPH/HDU**; có `stopBeforeClose:true` (safety); chống Chrome throttle tab nền bằng AudioContext keepalive im lặng.
+- **`ccts-fill-list.js`** — điền tab "Additional Information"; đã fix: cascader toggle idempotent, verify-and-retry cho single select, luôn Cancel dialog, race condition khi activate tab.
+
+### Pattern thao tác Element UI (DOM)
+- `findAppDoc(window)` đi qua các iframe same-origin.
+- Dropdown/popper append vào `<body>` → so sánh visibility before/after để xác định cái vừa mở.
+- `closeAllPoppers()` dispatch `mousedown`+`mouseup` thật (MouseEvent).
+- Cascader: check `is-checked` trước khi click leaf.
+- Cột `fixed-right` chứa nút Detail.
+
+---
+
+## 2. VOMS — `voms.vgreen.net`
+
+### API
+- **Base:** `https://voms-api.vgreen.net/`
+- **Auth:** header `Authorization: Bearer <JWT>` + `x-tenant-id: <tid>`.
+  - JWT auto-lấy từ localStorage/sessionStorage (regex `eyJ...`).
+  - `tid` = field `tid` trong payload JWT (`JSON.parse(atob(token.split('.')[1])).tid`).
+  - Hoặc hook XHR/fetch để bắt header. **Đừng dán JWT tay.**
+
+```js
+function authHeaders() {
+  // lấy token eyJ... từ local/sessionStorage, decode tid
+  return { accept:'application/json, text/plain, */*',
+           authorization:'Bearer '+token, 'x-tenant-id':tid };
+}
+```
+
+### Endpoint chính
+| Mục đích | Endpoint |
+|---|---|
+| List repair case | `api/v1/repair-cases?page=&limit=&search=<RC-...>` |
+| CPO logs theo case | `api/v1/repair-cases/{id}/cpo-logs` |
+
+- **Lọc theo mã RC:** chỉ `search=` chạy (trả `totalItems=1` khi khớp). `code=` / `keyword=` / `q=` đều **400 Bad Request**.
+- Quy trình: `search=RC-...` → lấy `id` số → gọi `cpo-logs`.
+
+### Cấu trúc response
+- List: `{ data: { items:[...], meta:{ totalItems, totalPages } }, success }`
+- Ticket object: `code` (mã `RC-...`), `id` (chuỗi số, vd `'564771'`).
+- Toàn bộ dataset ~84.215 ticket / ~8.422 trang → **không phân trang toàn bộ**, phải resolve theo mã.
+- CPO log object có field `status` = `OPEN` / `CLOSED`. `hasClosed` quét "lì" mọi value = `CLOSED` để không phụ thuộc tên field/cách bọc response.
+
+### Status code repair case
+`accepted` (KTV đã nhận) · `reopened` (mở lại) · `closed` (đóng) · `pending` · `assigned` · `completed` · `cancelled`.
+
+### Script & workflow VOMS đã có
+| Script | Mục đích | Cơ chế |
+|---|---|---|
+| `voms-scan-status.js` | Quét **trạng thái repair case** cho 1 list ID/RC | search từng cái → đọc `items[0].status` → map nhãn VN → gom nhóm |
+| (quét CLOSED log) | Soi **CPO log** xem có dòng `CLOSED` không | `resolveId(RC)` → `cpo-logs/{id}` → `hasClosed()` quét mọi value = CLOSED |
+
+**`voms-scan-status.js` — quét trạng thái list ticket:**
+- Input: list ID số (18 chữ số) **hoặc** mã `RC-` (đều dùng param `search=`).
+- Tự bắt `X-Tenant-Id` + `Authorization` (hook XHR `setRequestHeader` + fetch; fallback JWT từ local/sessionStorage, decode `tid` từ payload).
+- Gọi `repair-cases?page=1&limit=10&search=<id>`; `meta.totalItems=0` = không có dữ liệu; lấy record khớp `id`/`code` (hoặc `items[0]`).
+- Map status: `accepted`→KTV đã nhận, `reopened`→Mở lại, `closed`→Đóng, `pending/assigned/completed/cancelled`→… ; mã lạ giữ nguyên để bổ sung vào `STATUS_VI`.
+- Lấy thêm `station.stationCode`, `station.stationSerialNumber`.
+- RETRY 3 lần (1500ms) khi lỗi CORS/5xx; **401/403 = hết phiên → dừng, F5 login lại**. Delay 250ms/ID.
+- Output: bảng chi tiết + bảng đếm theo trạng thái + list ID từng nhóm; copy TSV vào clipboard (ID dạng text) để dán Excel.
+- Biến phụ sau khi chạy: `__scanResults`, `__scanByStatus`, `__scanTSV`. Lấy 1 nhóm: `copy(__scanByStatus["Đóng"].join("\n"))`. Dừng giữa chừng: `window.__scanStop = true`.
+
+> Phân biệt: **scan-status** check trạng thái case; **quét CLOSED** mở `cpo-logs` soi log — hai mục đích khác nhau.
+
+### ⚠️ Chính xác ID + Excel
+- ID 18 chữ số → trong Excel phải lưu dạng **Text** (tránh làm tròn 15 chữ số).
+- Khi so khớp/đếm ID: dùng **`SUMPRODUCT`+`EXACT`**, KHÔNG dùng `COUNTIF` (rounding).
+- Export CSV: bọc ID/serial dạng `="..."`. Export `.xls` (HTML table): cột ID/serial dùng `mso-number-format:'\@'`.
+- Lọc/ẩn dòng trùng giữa 2 sheet: copy list "close" sang cột phụ cùng sheet → dùng rule **Duplicate Values** sẵn của Excel → lọc theo màu (formula CF hay lỗi khi ô định dạng Text).
+
+---
+
+## 3. App liên quan (tham chiếu nhanh)
+- **"Bàn kiểm Evidence"** (React) — review ảnh/video KTV theo checklist SOP 16 mục BSS rework, AI phân tích từng ảnh (Anthropic API, claude-sonnet-4), xuất status string sẵn cho CCTS. *Tách biệt* với workflow đóng ticket FAC.
+- **BSS Checksheet** (Flutter) — app cho KTV chụp ảnh có watermark khắc cứng (SN, GPS, địa chỉ Nominatim, timestamp, note). Repo: `C:\src\bss_app2`.
+
+---
+
+*Cập nhật: 24/06/2026. Có gì thay đổi (đổi tiêu chí, thêm endpoint…) nói mình cập nhật lại file này.*
