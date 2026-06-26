@@ -92,7 +92,7 @@ class MainActivity : FlutterActivity() {
                 // Đặt thanh watermark ở đáy video: bottom của overlay → bottom của frame
                 val settings = OverlaySettings.Builder()
                     .setOverlayFrameAnchor(/* x= */ 0f, /* y= */ -1f)
-                    .setVideoFrameAnchor(/* x= */ 0f, /* y= */ -1f)
+                    .setBackgroundFrameAnchor(/* x= */ 0f, /* y= */ -1f)
                     .build()
 
                 val overlayEffect = OverlayEffect(
