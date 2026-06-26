@@ -16,6 +16,7 @@ dependencies:
   path_provider: ^2.1.4     # thư mục lưu trong app
   path: ^1.9.0
   gal: ^2.0.0               # lưu ảnh/video thẳng vào bộ sưu tập điện thoại
+  ffmpeg_kit_flutter_min: ^6.0.3  # gắn watermark vào video
   http: ^1.2.0              # gọi dịch vụ tra địa danh từ toạ độ (thuần Dart, không có phần Android)
   intl: ^0.19.0
 

@@ -10,6 +10,7 @@ import '../services/image_processor.dart';
 import '../services/location_service.dart';
 import '../services/reference_service.dart';
 import '../services/storage_service.dart';
+import '../services/video_processor.dart';
 import '../theme.dart';
 
 class CaptureScreen extends StatefulWidget {
@@ -377,10 +378,29 @@ class _CaptureScreenState extends State<CaptureScreen> {
       if (video) {
         final XFile? x = await _picker.pickVideo(source: ImageSource.camera);
         if (x == null) return;
-        final ext = p.extension(x.path).replaceAll('.', '').toLowerCase();
-        final fn = [app.filePrefix, t.code, slug, stamp].whereType<String>().join('_') + '.${ext.isEmpty ? 'mp4' : ext}';
+        final fn = [app.filePrefix, t.code, slug, stamp].whereType<String>().join('_') + '.mp4';
         final dest = p.join(dir.path, fn);
-        await File(x.path).copy(dest);
+
+        final posLabel = slug == null
+            ? null
+            : (t.side ? 'Khoang $_khoang · ${_side == 'trai' ? 'Trái' : 'Phải'}' : 'Khoang $_khoang');
+        final stepNote = app.itemNotes[t.code] ?? '';
+        final lines = <String>[
+          'SN: ${app.sn}  |  ${t.name}',
+          if (posLabel != null) posLabel,
+          '${_human(now)}  |  KTV: ${app.tech}',
+          if (stepNote.isNotEmpty) 'Ghi chú: $stepNote',
+          if (app.ticketNote.isNotEmpty) 'GC chung: ${app.ticketNote}',
+          if (LocationService.address.isNotEmpty) LocationService.address,
+          'GPS: ${LocationService.label}',
+        ];
+
+        await VideoProcessor.processVideo(
+          srcPath: x.path,
+          savePath: dest,
+          watermarkLines: lines,
+        );
+
         app.addShot(t, Shot(filename: fn, path: dest, isVideo: true, posSlug: slug, when: now));
         destPath = dest;
         isVid = true;
