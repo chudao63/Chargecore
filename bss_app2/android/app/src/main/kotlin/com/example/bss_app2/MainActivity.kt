@@ -10,6 +10,8 @@ import androidx.annotation.NonNull
 import androidx.media3.common.MediaItem
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.TextureOverlay
+import com.google.common.collect.ImmutableList
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
@@ -84,7 +86,7 @@ class MainActivity : FlutterActivity() {
                 }
 
                 val overlayEffect = OverlayEffect(
-                    listOf(BitmapOverlay.createStaticBitmapOverlay(overlay))
+                    ImmutableList.of<TextureOverlay>(BitmapOverlay.createStaticBitmapOverlay(overlay))
                 )
 
                 val editedItem = EditedMediaItem.Builder(
