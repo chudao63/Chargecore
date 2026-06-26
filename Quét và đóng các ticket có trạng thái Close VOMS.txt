@@ -15,7 +15,7 @@
     el.dispatchEvent(new MouseEvent('mouseup', o));
     el.dispatchEvent(new MouseEvent('click', o));
   };
-  const waitFor = async (fn, { timeout = 20000, interval = 250 } = {}) => {
+  const waitFor = async (fn, { timeout = 30000, interval = 250 } = {}) => {
     const t0 = Date.now();
     while (Date.now() - t0 < timeout) { const v = fn(); if (v) return v; await sleep(interval); }
     return null;
@@ -126,6 +126,7 @@
     'AcContactorActionError':               mk('Lỗi AC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'Lỗi AC contactor', 'Trụ xanh hết lỗi'),
     'Connector Temperature Failure':        mk('Lỗi trụ khác',     HW_KHAC, 'Khắc phục sự cố khác', 'Lỗi Connector Temperature Failure'),
     'DC Contactor DcOutputContactorError':  mk('Lỗi DC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'DC Contactor DcOutputContactorError'),
+	'DcOutputContactorError':  				mk('Lỗi DC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'DcOutputContactorError'),
     'DCMeterDataMismatch':                  mk('Lỗi DC meter',     HW_KHAC, 'Khắc phục sự cố khác', 'DCMeterDataMismatch'),
     'DoorAccessDetected':                   mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Lỗi mở cửa'),
     'FanFailure':                           mk('Lỗi quạt làm mát', HW,      'Thay LK cơ khí',       'Lỗi quạt'),
@@ -144,6 +145,11 @@
     'SupplyControllerCommunication':        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'SupplyControllerCommunication'),
     'TamperDetection':                      mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'TamperDetection'),
     'UnderVoltage':                         mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'UnderVoltage'),
+	'RelayAdhesion':                        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'RelayAdhesion'),
+	'Input Under Voltage':					mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Input Under Voltage'),
+	'CS_ERROR_HV_DC_UNDERVOLTAGE':			mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'CS_ERROR_HV_DC_UNDERVOLTAGE'),
+	'Supply Controller Communication Loss':			mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Supply Controller Communication Loss),
+	
   };
   const ALIAS = { 'Door Access Detected': 'DoorAccessDetected' };
   const PRESETS = {};

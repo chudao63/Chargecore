@@ -1,0 +1,202 @@
+/* ============================================================
+ * ccts-resolve-ids.js
+ * Quét danh sách external ID (thirdTicketId, dạng RC-...) -> Ticket ID
+ * Trả về: cctsTicketPk (PK CHUẨN), cctsTicketId (hiển thị, lossy), status
+ *
+ * CÁCH DÙNG:
+ *   1. Mở tab CCTS (console.cnpowercore.com), F12 -> Console.
+ *   2. Dán danh sách RC- vào biến EXTERNAL_IDS bên dưới.
+ *   3. Paste cả file này vào Console, Enter.
+ *   4. Nếu script báo chưa bắt được token -> bấm Search/refresh list
+ *      trên UI 1 lần để trigger 1 request, token sẽ tự bắt.
+ * ============================================================ */
+(async () => {
+  'use strict';
+
+  // ===== 1. DÁN DANH SÁCH EXTERNAL ID VÀO ĐÂY (cách nhau bằng xuống dòng/space/phẩy) =====
+  const EXTERNAL_IDS = `
+RC-WOL50XW1EDUDMJ
+RC-JPKRODD12PF02X
+RC-5NJO66OOWKH66
+RC-5NJY2WDXJ1S1N5
+RC-5NJYO6PKGLA1ED
+RC-PXOREY1PO6SNP
+RC-K6QMO9926OA02
+RC-EN9WW2X9D4S2
+RC-EN9D2LOQPOHO7
+RC-5NJ25YDXRPI6R
+RC-XR22W44Q9RHY3L
+RC-0X6GXG3QLJCP1
+RC-YROGE05RD2HDK
+RC-L3LN4L1E26H0J
+RC-940LO6N72KH0O
+RC-YRONO5K564IDYW
+RC-JPKRE1E9EJC0DD
+RC-L3L4PW7R1LU75
+RC-QWJQ7E21E3H1X3
+RC-WO3LJ9NYJDBD5K
+RC-5N2JGQ6QP9H1EN
+RC-XR12DM4EEPA1R
+RC-7ODJWO32ERSN0
+RC-K6KQOGO77QAE5
+RC-K6KQXQ39GJBOGR
+RC-YROL05XP26A9K
+RC-JPK5NYR3EQS0J9
+RC-WOL796Q0G7HD24
+RC-PXO05YR1Y3UQ1
+RC-3LNMJKWOYRT4KR
+RC-K6QG0MR5J1CO9L
+RC-3LNMJKWO9QS45K
+RC-WOL796Q0GLFGX
+RC-2150O2GE25C1QP
+RC-3LNMJKWOYGF4Q1
+RC-GO5NG77550IPK0
+RC-2152GMYE56CP0
+RC-K6QG0MR5MWHO2E
+RC-0X6L6NXDD7TJP
+RC-K6QMMDX9RMFD
+RC-6EJM06JDGMBWX
+RC-YROQ5GQ422CDY6
+RC-L3LP7QWQ5RA1LJ
+RC-O7OEKR4RJ3CY5
+RC-QWJPXYE1QJU6L
+RC-R1D31ON79LCD
+RC-3LNWX6YKDDHL7
+RC-3LNJD9160PS4P5
+RC-XR1O6KL6XJHK7
+RC-2153252MGMFXO
+RC-JPKY2MGOXDFMR
+RC-2152G56W7OI0L
+RC-XR2740RM3QF5P
+RC-O7O0P35G4MFXR
+RC-7OJ5GYM3N7CPMM
+RC-1W59YEPYW9SR3
+RC-21523GWRGDH1E9
+RC-6EJOJ0OER0UPY
+
+`.trim().split(/[\s,]+/).filter(Boolean);
+
+  // ===== CONFIG =====
+  const FIND = 'https://cloud.cnpowercore.com:8091/ccts/cctsTicket/findCCTSTicket';
+  const DELAY_MS = 300;      // nghỉ giữa các request cho lịch sự
+  const TIMEZONE = 420;
+  const PAGE_SIZE = 10;
+
+  // ===== 2. TOKEN AUTO-CAPTURE (hook fetch + XHR) =====
+  // Token nằm trong body mọi POST tới ccts. Hook để nhặt field "token".
+  if (!window.__ccts_token_hooked) {
+    window.__ccts_token_hooked = true;
+    window.__CCTS_TOKEN = window.__CCTS_TOKEN || null;
+
+    const grab = (body) => {
+      try {
+        if (typeof body !== 'string') return;
+        const m = body.match(/"token"\s*:\s*"([^"]+)"/);
+        if (m && m[1]) window.__CCTS_TOKEN = m[1];
+      } catch (_) {}
+    };
+
+    const _fetch = window.fetch;
+    window.fetch = function (input, init) {
+      try {
+        const url = (typeof input === 'string') ? input : (input && input.url);
+        if (url && url.includes('/ccts/') && init && init.body) grab(init.body);
+      } catch (_) {}
+      return _fetch.apply(this, arguments);
+    };
+
+    const _send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function (body) {
+      try { if (body) grab(body); } catch (_) {}
+      return _send.apply(this, arguments);
+    };
+    console.log('%c[CCTS] Token hook đã cài.', 'color:#888');
+  }
+
+  // chờ token tối đa ~20s
+  async function waitToken(timeoutMs = 20000) {
+    if (window.__CCTS_TOKEN) return window.__CCTS_TOKEN;
+    console.warn('[CCTS] Chưa có token. Hãy bấm Search/refresh list trên UI 1 lần...');
+    const t0 = Date.now();
+    while (Date.now() - t0 < timeoutMs) {
+      if (window.__CCTS_TOKEN) return window.__CCTS_TOKEN;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    return null;
+  }
+
+  // ===== Parse an toàn precision: đọc raw text, KHÔNG JSON.parse =====
+  function parseTickets(rawText, wantThird) {
+    const parts = rawText.split('"cctsTicketPk":');
+    const out = [];
+    for (let i = 1; i < parts.length; i++) {
+      const chunk = parts[i];
+      const pk    = (chunk.match(/^\s*"?(\d+)"?/) || [])[1] || null;
+      const idM   = chunk.match(/"cctsTicketId"\s*:\s*"?(\d+)"?/);
+      const thM   = chunk.match(/"thirdTicketId"\s*:\s*"([^"]+)"/);
+      const stM   = chunk.match(/"cctsTicketStatus"\s*:\s*"([^"]*)"/);
+      out.push({
+        pk,
+        id: idM ? idM[1] : null,
+        third: thM ? thM[1] : null,
+        status: stM ? stM[1] : null,
+      });
+    }
+    // ưu tiên ticket khớp đúng thirdTicketId; nếu không có thì lấy cái đầu
+    return out.find(t => t.third === wantThird) || out[0] || null;
+  }
+
+  async function resolveOne(rcId, token) {
+    const res = await fetch(FIND, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json;charset=UTF-8',
+                 'accept': 'application/json, text/plain, */*' },
+      body: JSON.stringify({
+        page: { pageNum: 1, pageSize: PAGE_SIZE },
+        timezoneOffset: TIMEZONE,
+        thirdTicketId: rcId,
+        token,
+      }),
+    });
+    const raw = await res.text();           // raw để giữ precision 19 chữ số
+    return parseTickets(raw, rcId);
+  }
+
+  // ===== RUN =====
+  const token = await waitToken();
+  if (!token) { console.error('[CCTS] Hết thời gian chờ token. Trigger 1 request trên UI rồi chạy lại.'); return; }
+
+  console.log(`[CCTS] Bắt đầu quét ${EXTERNAL_IDS.length} external ID...`);
+  const results = [];
+  for (let i = 0; i < EXTERNAL_IDS.length; i++) {
+    const rc = EXTERNAL_IDS[i];
+    try {
+      const t = await resolveOne(rc, token);
+      if (t && t.pk) {
+        results.push({ external: rc, cctsTicketPk: t.pk, cctsTicketId: t.id, status: t.status, ok: '✔' });
+        console.log(`✔ ${rc} -> PK ${t.pk} | ID ${t.id} | ${t.status}`);
+      } else {
+        results.push({ external: rc, cctsTicketPk: '', cctsTicketId: '', status: 'NOT_FOUND', ok: '✘' });
+        console.warn(`✘ ${rc} -> không tìm thấy`);
+      }
+    } catch (e) {
+      results.push({ external: rc, cctsTicketPk: '', cctsTicketId: '', status: 'ERROR: ' + e.message, ok: '✘' });
+      console.error(`✘ ${rc} -> lỗi:`, e);
+    }
+    if (i < EXTERNAL_IDS.length - 1) await new Promise(r => setTimeout(r, DELAY_MS));
+  }
+
+  // bảng tổng hợp
+  console.table(results);
+
+  // TSV để dán thẳng vào Excel (nhớ format cột PK/ID là Text trước khi dán!)
+  const tsv = ['external\tcctsTicketPk\tcctsTicketId\tstatus']
+    .concat(results.map(r => `${r.external}\t${r.cctsTicketPk}\t${r.cctsTicketId}\t${r.status}`))
+    .join('\n');
+  console.log('%c--- TSV (copy vào Excel, format PK/ID = Text) ---', 'color:#0a0;font-weight:bold');
+  console.log(tsv);
+
+  window.__cctsResolveResults = results;
+  console.log('[CCTS] Xong. Kết quả còn ở window.__cctsResolveResults');
+})();
