@@ -15,7 +15,6 @@ import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
-import com.google.common.collect.ImmutableList
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -85,14 +84,14 @@ class MainActivity : FlutterActivity() {
                 }
 
                 val overlayEffect = OverlayEffect(
-                    ImmutableList.of(BitmapOverlay.createStaticBitmapOverlay(overlay))
+                    listOf(BitmapOverlay.createStaticBitmapOverlay(overlay))
                 )
 
                 val editedItem = EditedMediaItem.Builder(
                     MediaItem.fromUri(Uri.fromFile(File(srcPath)))
                 )
                     .setEffects(
-                        Effects(ImmutableList.of(), ImmutableList.of(overlayEffect))
+                        Effects(listOf(), listOf(overlayEffect))
                     )
                     .build()
 
