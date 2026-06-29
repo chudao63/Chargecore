@@ -13,6 +13,7 @@
 (async () => {
   // ---- 1) LIST ID hoặc MÃ RC (giữ dạng CHUỖI, mỗi dòng 1 cái) ----
   const RAW = `
+
 `;
   const IDS = RAW.trim().split(/\s+/).filter(Boolean);
 
@@ -143,7 +144,7 @@
       } else {
         // ưu tiên record khớp đúng id/code; nếu không thì lấy đầu tiên (từ v2)
         const it = items.find(x => x.id === id || x.code === id) || items[0];
-        if (it.id) rec.id = String(it.id);   // lấy ID THẬT từ API, tránh ghi lại ID dán vào đã bị làm tròn
+        // GIỮ NGUYÊN ID đầu vào (id bạn dán vào RAW) ở cột ID — không thay bằng it.id (số ticket ngắn của API)
         rec.code = it.code || '';
         rec.statusRaw = it.status || '';
         rec.status = viOf(it.status);
