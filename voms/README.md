@@ -15,7 +15,7 @@ Hai việc:
 | **`voms-scan-status.js`** | Quét trạng thái list ticket → xuất CSV/XLS/TSV |
 | **`Quét và đóng các ticket có trạng thái Close VOMS.js`** | Quét + tự đóng ticket Close (có panel UI) |
 
-> `voms-scan-status.js` là bản gộp đã thay thế các đời cũ (v1, v2, scan-ticket-using-api). Nó gồm: nhận cả ID lẫn mã `RC-`, fallback lấy JWT từ storage, khớp record chính xác, xuất CSV/XLS, map trạng thái đầy đủ, cảnh báo ID đuôi `0000`, hook bắt header lọc theo URL.
+> `voms-scan-status.js` là bản gộp đã thay thế các đời cũ (v1, v2, scan-ticket-using-api — đã xoá khỏi repo). Nó gồm: nhận cả ID lẫn mã `RC-`, fallback lấy JWT từ storage, khớp record chính xác, xuất CSV/XLS, map trạng thái đầy đủ, cảnh báo ID đuôi `0000`, hook bắt header lọc theo URL.
 
 ---
 
@@ -54,7 +54,7 @@ Cấu hình tốc độ: `DELAY = 250` (ms nghỉ giữa request), `RETRIES = 3`
 
 ### Kết quả
 - Bảng chi tiết + bảng tổng hợp theo trạng thái in ra Console.
-- **Tự copy TSV vào clipboard** → dán thẳng vào Excel.
+- **Tự copy TSV vào clipboard** → dán thẳng vào Excel (ID/Serial đã bọc `="..."` nên paste **không bị làm tròn**).
 - Tự tải về 2 file: `ticket_status_<timestamp>.csv` và `.xls` (ID/Serial ép kiểu Text để không bị làm tròn).
 - Biến truy cập sau khi chạy:
   - `__scanResults` — mảng kết quả đầy đủ
@@ -62,6 +62,8 @@ Cấu hình tốc độ: `DELAY = 250` (ms nghỉ giữa request), `RETRIES = 3`
   - `__scanTSV` — chuỗi TSV
   - Lấy ID 1 nhóm: `copy(__scanByStatus["Đóng"].join("\n"))`
   - Xem các nhóm có: `Object.keys(__scanByStatus)`
+
+> ID trong kết quả lấy từ **API thật** (`it.id`) khi tìm thấy record → kể cả khi list dán vào `RAW` đã bị làm tròn sẵn, file xuất vẫn ghi ID đúng (miễn là `search=` vẫn khớp được record).
 
 > Lưu ý: bản gộp **không in cột "RC"** riêng trong file xuất (vẫn đọc `code` bên trong, chỉ không có cột). Cột trong file: ID, Trạng thái, Status raw, Mã trạm, Serial, Ghi chú.
 
@@ -136,6 +138,6 @@ Gọi lại panel nếu lỡ tắt: `vomsPanel()`. Hoặc chạy không panel: `
 ## Mẹo chống lỗi làm tròn ID (Excel)
 
 ID ticket 18–19 số, kiểu `double` của Excel chỉ chính xác ~15 số → 3 số cuối bị về `000`.
-- Trong file xuất, ID được bọc `="..."` (CSV) hoặc `mso-number-format:'\@'` (XLS) để ép **Text**.
+- Mọi đường xuất đều đã chống làm tròn: CSV bọc `="..."`, XLS dùng `mso-number-format:'\@'`, **và TSV clipboard cũng bọc `="..."`** → paste kiểu nào cũng giữ đủ 18 số (ô sẽ là Text, có dấu tam giác xanh — bình thường).
 - Khi tự nhập ID vào Excel: format ô **Text** trước, hoặc thêm dấu `'` đầu.
 - So sánh ID giữa 2 cột: dùng `EXACT()` / `SUMPRODUCT()`, **không** so sánh số trực tiếp.
