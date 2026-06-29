@@ -126,7 +126,7 @@
     'AcContactorActionError':               mk('Lỗi AC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'Lỗi AC contactor', 'Trụ xanh hết lỗi'),
     'Connector Temperature Failure':        mk('Lỗi trụ khác',     HW_KHAC, 'Khắc phục sự cố khác', 'Lỗi Connector Temperature Failure'),
     'DC Contactor DcOutputContactorError':  mk('Lỗi DC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'DC Contactor DcOutputContactorError'),
-	'DcOutputContactorError':  				mk('Lỗi DC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'DcOutputContactorError'),
+    'DcOutputContactorError':               mk('Lỗi DC contactor', HW_KHAC, 'Khắc phục sự cố khác', 'DcOutputContactorError'),
     'DCMeterDataMismatch':                  mk('Lỗi DC meter',     HW_KHAC, 'Khắc phục sự cố khác', 'DCMeterDataMismatch'),
     'DoorAccessDetected':                   mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Lỗi mở cửa'),
     'FanFailure':                           mk('Lỗi quạt làm mát', HW,      'Thay LK cơ khí',       'Lỗi quạt'),
@@ -145,11 +145,16 @@
     'SupplyControllerCommunication':        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'SupplyControllerCommunication'),
     'TamperDetection':                      mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'TamperDetection'),
     'UnderVoltage':                         mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'UnderVoltage'),
-	'RelayAdhesion':                        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'RelayAdhesion'),
-	'Input Under Voltage':					mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Input Under Voltage'),
-	'CS_ERROR_HV_DC_UNDERVOLTAGE':			mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'CS_ERROR_HV_DC_UNDERVOLTAGE'),
-	'Supply Controller Communication Loss':			mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Supply Controller Communication Loss),
-	
+    'RelayAdhesion':                        mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'RelayAdhesion'),
+    'Input Under Voltage':                  mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Input Under Voltage'),
+    'CS_ERROR_HV_DC_UNDERVOLTAGE':          mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'CS_ERROR_HV_DC_UNDERVOLTAGE'),
+    'Supply Controller Communication Loss': mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Supply Controller Communication Loss'),
+    'DataMismatch': 						mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'DataMismatch'),
+    'MCCB Error': 							mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'MCCB Error'),
+    'Lightening Protector Triggered': 		mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Lightening Protector Triggered'),
+    'ScreenCommunicationLoss': 				mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'ScreenCommunicationLoss'),
+    'CPVoltage': 							mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'CPVoltage'),
+    'Sharing Line Abnormal': 				mk('Lỗi trụ khác',     KHAC,    'Khắc phục sự cố khác', 'Sharing Line Abnormal'),
   };
   const ALIAS = { 'Door Access Detected': 'DoorAccessDetected' };
   const PRESETS = {};
@@ -157,18 +162,21 @@
   for (const [a,t] of Object.entries(ALIAS)) PRESETS[norm(a)] = { ...RAW[t], _key:t };
   const getPreset = name => name ? (PRESETS[norm(name)] || null) : null;
 
+  // processTicket trả về OBJECT { status, alarm } để gom đủ thông tin cho file xuất
   const processTicket = async id => {
     console.log(`\n========== ${id} ==========`);
+    let _alarm = '';
+    const D = status => ({ status, alarm: _alarm });
     const inp = findSearchInput();
-    if (!inp) { console.error('❌ Không thấy ô search'); return 'ERR_SEARCH'; }
+    if (!inp) { console.error('❌ Không thấy ô search'); return D('ERR_SEARCH'); }
     inp.focus(); setReactInput(inp, ''); await sleep(800);
     setReactInput(inp, id);
     inp.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',keyCode:13,bubbles:true}));
     const link = await waitFor(() => findDetailLink(id), { timeout: 10000 });
-    if (!link) { console.warn('⏭️ Không thấy ticket → SKIP'); return 'NOT_FOUND'; }
+    if (!link) { console.warn('⏭️ Không thấy ticket → SKIP'); return D('NOT_FOUND'); }
     await sleep(300); realClick(link);
     const ready = await waitFor(() => findLogCpoCard() || findEditBtn(), { timeout: 10000 });
-    if (!ready) { console.warn('⚠️ Chi tiết không load kịp → SKIP'); await goBackToList(); return 'DETAIL_TIMEOUT'; }
+    if (!ready) { console.warn('⚠️ Chi tiết không load kịp → SKIP'); await goBackToList(); return D('DETAIL_TIMEOUT'); }
     const statuses = await waitFor(() => {
       const card = findLogCpoCard(); if (!card) return null;
       const s = [...card.querySelectorAll('div')].map(d => d.textContent.trim().toUpperCase()).filter(t => ['OPEN','CLOSED','CLOSE'].includes(t));
@@ -177,31 +185,33 @@
     await sleep(300);
     const closed = statuses ? (statuses.includes('CLOSED') || statuses.includes('CLOSE')) : null;
     console.log('📋 Log CPO:', statuses, '| CLOSED:', closed);
-    if (!closed) { console.log('⏭️ Không có CLOSED → SKIP'); await goBackToList(); return 'NO_CLOSED'; }
+    if (!closed) { console.log('⏭️ Không có CLOSED → SKIP'); await goBackToList(); return D('NO_CLOSED'); }
     const alarmName = readAlarmName();
+    _alarm = alarmName || '';
     const P = getPreset(alarmName);
-    if (!P) { console.warn(`⏭️ Mã "${alarmName}" KHÔNG CÓ PRESET → SKIP`); await goBackToList(); return 'NO_PRESET:'+(alarmName||'?'); }
+    if (!P) { console.warn(`⏭️ Mã "${alarmName}" KHÔNG CÓ PRESET → SKIP`); await goBackToList(); return D('NO_PRESET:'+(alarmName||'?')); }
     console.log(`🏷️ Mã: "${alarmName}" → preset: ${P._key}`);
-    if (!findActionButton('Sửa chữa')) { console.log('⏭️ Không có nút "Sửa chữa" (đã xử lý) → SKIP'); await goBackToList(); return 'SKIP_STATE'; }
+    if (!findActionButton('Sửa chữa')) { console.log('⏭️ Không có nút "Sửa chữa" (đã xử lý) → SKIP'); await goBackToList(); return D('SKIP_STATE'); }
     const editBtn = findEditBtn();
-    if (!editBtn) { console.log('⏭️ Không có "Chỉnh sửa" → SKIP'); await goBackToList(); return 'NO_EDIT'; }
+    if (!editBtn) { console.log('⏭️ Không có "Chỉnh sửa" → SKIP'); await goBackToList(); return D('NO_EDIT'); }
     realClick(editBtn);
     await waitFor(() => findControlByLabel('Hình thức xử lý'), { timeout: 8000 });
     await sleep(500);
-    const abort = where => { console.error(`❌ Dừng tại: ${where} (form còn mở, xử lý tay)`); return 'ABORT:'+where; };
+    const abort = where => { console.error(`❌ Dừng tại: ${where} (form còn mở, xử lý tay)`); return D('ABORT:'+where); };
     if (!await selectRadixOption('Hình thức xử lý', P.hinhThuc))   return abort('Hình thức xử lý');
     if (!await selectRadixOption('Phân loại sửa chữa', P.phanLoai)) return abort('Phân loại sửa chữa');
     if (!await selectCmdkOption('Nhóm lỗi', P.nhomLoi))            return abort('Nhóm lỗi');
     if (!await selectCmdkOption('Chi tiết lỗi', P.chiTietLoi))     return abort('Chi tiết lỗi');
     await multiSelectCmdk('Nhóm xử lý', P.nhomXuLy);
     if (!await selectCmdkOption('Hành động xử lý', P.hanhDong))    return abort('Hành động xử lý');
-    await fillTextarea('Nhập mô tả chi tiết lỗi', P.moTaLoi);
+    const moTaLoiDong = alarmName ? ('trụ báo lỗi ' + alarmName) : P.moTaLoi;
+    await fillTextarea('Nhập mô tả chi tiết lỗi', moTaLoiDong);
     await fillTextarea('Nhập mô tả chi tiết sửa chữa', P.moTaSua);
     await sleep(300);
     const upd = [...document.querySelectorAll('[data-slot="dialog-content"] button')].find(b => b.textContent.trim() === 'Cập nhật');
     if (!upd) return abort('nút Cập nhật');
     realClick(upd); await sleep(1500);
-    if ([...document.querySelectorAll('[data-slot="dialog-content"]')].some(d=>d.offsetParent!==null)) { console.error('⚠️ Dialog còn mở sau Cập nhật → DỪNG'); return 'UPDATE_FAIL'; }
+    if ([...document.querySelectorAll('[data-slot="dialog-content"]')].some(d=>d.offsetParent!==null)) { console.error('⚠️ Dialog còn mở sau Cập nhật → DỪNG'); return D('UPDATE_FAIL'); }
     await sleep(1500); // đợi trang ổn định sau Cập nhật
 
     // Sửa chữa — retry click tới khi hộp thoại bật ra
@@ -222,7 +232,7 @@
       const reason = hcAny ? 'nút Hoàn công bị XÁM (disabled)' : 'không thấy nút Hoàn công';
       console.warn(`⚠️ ${id}: ${reason} → đã Sửa chữa, BỎ QUA Hoàn công`);
       await goBackToList();
-      return 'STUCK_HOANCONG';
+      return D('STUCK_HOANCONG');
     }
     let hcDlg = false;
     for (let i=0; i<4 && !hcDlg; i++) {
@@ -234,28 +244,162 @@
 
     console.log(`✅✅ ${id} HOÀN TẤT`);
     await goBackToList();
-    return 'DONE';
+    return D('DONE');
   };
+
+  // ===== Diễn giải trạng thái → ghi chú tiếng Việt =====
+  const STATUS_NOTE = {
+    DONE:           'Đã đóng thành công (Sửa chữa + Hoàn công)',
+    NO_CLOSED:      'Log CPO chưa có CLOSED → bỏ qua',
+    NOT_FOUND:      'Không tìm thấy ticket khi search',
+    SKIP_STATE:     'Không có nút "Sửa chữa" (có thể đã xử lý) → bỏ qua',
+    NO_EDIT:        'Không có nút "Chỉnh sửa" → bỏ qua',
+    DETAIL_TIMEOUT: 'Trang chi tiết load không kịp → bỏ qua',
+    ERR_SEARCH:     'Không thấy ô tìm kiếm trên trang',
+    STUCK_HOANCONG: 'Đã Sửa chữa nhưng Hoàn công xám/không có → CẦN XỬ LÝ TAY',
+    UPDATE_FAIL:    'Dialog còn mở sau khi Cập nhật → CẦN XỬ LÝ TAY',
+  };
+  const noteFor = (status, alarm) => {
+    if (status.startsWith('NO_PRESET')) return `Mã cảnh báo "${status.split(':').slice(1).join(':') || alarm || '?'}" chưa có trong preset → bỏ qua`;
+    if (status.startsWith('ABORT'))     return `Dừng tại bước "${status.split(':').slice(1).join(':')}" (form còn mở) → CẦN XỬ LÝ TAY`;
+    return STATUS_NOTE[status] || status;
+  };
+  const needsManual = status => status.startsWith('ABORT') || ['STUCK_HOANCONG','UPDATE_FAIL'].includes(status);
+
+  // ===== Xuất CSV =====
+  const csvCell = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+  const buildCsv = records => {
+    const header = ['STT','Ticket','Lỗi trụ gặp','Trạng thái','Ghi chú','Cần xử lý tay'];
+    const rows = records.map((r,i) => [
+      i+1,
+      '="'+r.id+'"',               // ép Excel hiểu là Text → không làm tròn ID dài
+      r.alarm || '',
+      r.status,
+      noteFor(r.status, r.alarm),
+      needsManual(r.status) ? 'CÓ' : '',
+    ].map(csvCell).join(','));
+    return '\uFEFF' + [header.map(csvCell).join(','), ...rows].join('\r\n'); // BOM cho tiếng Việt
+  };
+  const downloadCsv = records => {
+    const csv = buildCsv(records);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const t = new Date(), p = n => String(n).padStart(2,'0');
+    a.download = `voms-close-result-${t.getFullYear()}${p(t.getMonth()+1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}.csv`;
+    a.href = url; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return a.download;
+  };
+
   const runAll = async ids => {
-    const result = {};
+    const result = {}, records = [];
     for (const id of ids) {
-      const r = await processTicket(id);
-      result[id] = r;
+      const r = await processTicket(id);            // { status, alarm }
+      result[id] = r.status;
+      records.push({ id, status: r.status, alarm: r.alarm || '' });
+      if (window.__vomsPanelProgress) window.__vomsPanelProgress(records.length, ids.length, id, r.status);
       // CHỈ dừng mẻ khi ABORT / UPDATE_FAIL. STUCK_HOANCONG thì chạy tiếp.
-      if ((typeof r === 'string' && r.startsWith('ABORT')) || r === 'UPDATE_FAIL') { console.error('🛑 DỪNG TOÀN BỘ để xử lý tay:', id); break; }
+      if (r.status.startsWith('ABORT') || r.status === 'UPDATE_FAIL') { console.error('🛑 DỪNG TOÀN BỘ để xử lý tay:', id); break; }
       await sleep(1500);
     }
     console.log('\n===== KẾT QUẢ =====');
     console.table(result);
-    // tóm tắt nhóm
     const grp = {};
-    for (const [id,r] of Object.entries(result)) { const k=r.split(':')[0]; (grp[k]=grp[k]||[]).push(id); }
+    for (const [id,s] of Object.entries(result)) { const k = s.split(':')[0]; (grp[k]=grp[k]||[]).push(id); }
     console.log('Tóm tắt:', Object.fromEntries(Object.entries(grp).map(([k,v])=>[k,v.length])));
     window.__lastResult = result;
+    window.__lastRecords = records;
+    let fname = '';
+    try { fname = downloadCsv(records); console.log('💾 Đã xuất file:', fname); }
+    catch (e) { console.error('Lỗi xuất CSV:', e); }
+    if (window.__vomsPanelDone) window.__vomsPanelDone(records, grp, fname);
     return result;
   };
 
-  window.processTicket = processTicket;
+  // ===== Panel: dán & chạy =====
+  const parseIds = txt => [...new Set((txt||'').split(/[\s,;]+/).map(s => s.replace(/#/g,'').trim()).filter(Boolean))];
+
+  const createPanel = () => {
+    document.getElementById('voms-panel')?.remove();
+    const box = document.createElement('div');
+    box.id = 'voms-panel';
+    box.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;width:330px;background:#1e293b;color:#e2e8f0;font:13px/1.45 system-ui,sans-serif;border:1px solid #334155;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.45);overflow:hidden';
+    box.innerHTML = `
+      <div id="vp-head" style="display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:#0f172a;cursor:move;user-select:none">
+        <b style="font-size:13px">⚡ VOMS – Đóng ticket Close</b>
+        <span style="display:flex;gap:6px">
+          <button id="vp-min" style="all:unset;cursor:pointer;padding:0 6px;border-radius:4px;color:#94a3b8">—</button>
+          <button id="vp-x"   style="all:unset;cursor:pointer;padding:0 6px;border-radius:4px;color:#f87171">✕</button>
+        </span>
+      </div>
+      <div id="vp-body" style="padding:12px;display:flex;flex-direction:column;gap:9px">
+        <textarea id="vp-ids" rows="6" placeholder="Dán danh sách ticket vào đây&#10;(mỗi dòng 1 ticket, hoặc cách nhau bởi dấu phẩy / space)&#10;VD: RC-2506-xxxx" style="width:100%;box-sizing:border-box;resize:vertical;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:8px;font:12px/1.4 ui-monospace,monospace"></textarea>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="vp-run" style="all:unset;cursor:pointer;flex:1;text-align:center;background:#22c55e;color:#04210f;font-weight:700;padding:9px 0;border-radius:6px">▶ Chạy</button>
+          <button id="vp-dl"  style="all:unset;cursor:pointer;background:#334155;color:#e2e8f0;padding:9px 12px;border-radius:6px" title="Tải lại CSV lần chạy gần nhất">⬇ CSV</button>
+        </div>
+        <div id="vp-stat" style="color:#94a3b8;min-height:18px"></div>
+        <div id="vp-sum"  style="display:none;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px;max-height:160px;overflow:auto;font:12px/1.4 ui-monospace,monospace"></div>
+      </div>`;
+    document.body.appendChild(box);
+
+    const $ = id => box.querySelector(id);
+    const stat = (m, c='#94a3b8') => { const e = $('#vp-stat'); e.textContent = m; e.style.color = c; };
+    const run = $('#vp-run');
+
+    $('#vp-x').onclick   = () => box.remove();
+    $('#vp-min').onclick = () => { const b = $('#vp-body'); b.style.display = b.style.display === 'none' ? 'flex' : 'none'; };
+
+    // kéo thả panel
+    (() => {
+      const head = $('#vp-head'); let sx, sy, ox, oy, drag = false;
+      head.addEventListener('mousedown', e => {
+        if (e.target.tagName === 'BUTTON') return;
+        drag = true; sx = e.clientX; sy = e.clientY;
+        const r = box.getBoundingClientRect(); ox = r.left; oy = r.top;
+        box.style.right = 'auto'; box.style.left = ox + 'px'; box.style.top = oy + 'px';
+        e.preventDefault();
+      });
+      window.addEventListener('mousemove', e => { if (!drag) return; box.style.left = (ox + e.clientX - sx) + 'px'; box.style.top = (oy + e.clientY - sy) + 'px'; });
+      window.addEventListener('mouseup', () => drag = false);
+    })();
+
+    run.onclick = async () => {
+      const ids = parseIds($('#vp-ids').value);
+      if (!ids.length) { stat('⚠️ Chưa có ticket nào.', '#fbbf24'); return; }
+      run.disabled = true; run.style.opacity = '.6'; run.style.cursor = 'default';
+      $('#vp-sum').style.display = 'none';
+      stat(`🔄 Đang chạy 0/${ids.length}…`, '#38bdf8');
+      try { await runAll(ids); }
+      catch (e) { console.error(e); stat('❌ Lỗi: ' + e.message, '#f87171'); }
+      run.disabled = false; run.style.opacity = '1'; run.style.cursor = 'pointer';
+    };
+
+    $('#vp-dl').onclick = () => {
+      if (!window.__lastRecords?.length) { stat('Chưa có kết quả để tải.', '#fbbf24'); return; }
+      const f = downloadCsv(window.__lastRecords); stat('💾 Đã tải: ' + f, '#22c55e');
+    };
+
+    window.__vomsPanelProgress = (done, total, id, status) => stat(`🔄 ${done}/${total} – ${id}: ${status}`, '#38bdf8');
+    window.__vomsPanelDone = (records, grp, fname) => {
+      const ok = (grp.DONE || []).length;
+      const manual = records.filter(r => needsManual(r.status)).length;
+      stat(`✅ Xong ${records.length} ticket · DONE: ${ok} · cần tay: ${manual}${fname ? ' · 💾 ' + fname : ''}`, '#22c55e');
+      const sum = $('#vp-sum'); sum.style.display = 'block';
+      sum.innerHTML = records.map(r => {
+        const m = needsManual(r.status);
+        const c = r.status === 'DONE' ? '#22c55e' : m ? '#f87171' : '#fbbf24';
+        return `<div style="color:${c}">• ${r.id} — ${r.status}${r.alarm ? ' ['+r.alarm+']' : ''}</div>`;
+      }).join('');
+    };
+
+    return box;
+  };
+
+  window.processTicket = id => processTicket(id).then(r => r.status); // giữ tương thích: trả về chuỗi như cũ
   window.runAll = runAll;
-  console.log('✅ Đã nạp v5 (Hoàn công xám → STUCK_HOANCONG, không dừng mẻ; retry click Sửa chữa).');
+  window.vomsPanel = createPanel;
+  createPanel();
+  console.log('✅ Đã nạp v7: mô tả lỗi tự điền "trụ báo lỗi <tên cảnh báo>" + cột "Lỗi trụ gặp" trong CSV. Gọi lại panel: vomsPanel()');
 })();
