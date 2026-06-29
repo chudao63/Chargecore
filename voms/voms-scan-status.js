@@ -450,6 +450,7 @@
       } else {
         // ưu tiên record khớp đúng id/code; nếu không thì lấy đầu tiên (từ v2)
         const it = items.find(x => x.id === id || x.code === id) || items[0];
+        if (it.id) rec.id = String(it.id);   // lấy ID THẬT từ API, tránh ghi lại ID dán vào đã bị làm tròn
         rec.code = it.code || '';
         rec.statusRaw = it.status || '';
         rec.status = viOf(it.status);
@@ -484,8 +485,9 @@
     .forEach(k => console.log(`\n--- [${k}] : ${byStatus[k].length} ticket ---\n` + byStatus[k].join('\n')));
 
   // ---- 6) TSV + copy clipboard ----
+  // TSV để dán Excel — bọc ="..." cho ID/Serial để Excel KHÔNG làm tròn khi paste thẳng
   const tsv = 'ID\tTrang thai\tStatus raw\tMa tram\tSerial\tGhi chu\n' +
-    results.map(r => [r.id, r.status, r.statusRaw, r.station, r.serial, r.note].join('\t')).join('\n');
+    results.map(r => [`="${r.id}"`, r.status, r.statusRaw, r.station, `="${r.serial}"`, r.note].join('\t')).join('\n');
 
   window.__scanResults = results;
   window.__scanByStatus = byStatus;
