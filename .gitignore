@@ -1,0 +1,27 @@
+﻿# Flutter/Dart
+app/bss_app2/.dart_tool/
+app/bss_app2/.flutter-plugins
+app/bss_app2/.flutter-plugins-dependencies
+app/bss_app2/build/
+app/bss_app2/.pub-cache/
+app/bss_app2/.pub/
+
+# IDE
+app/bss_app2/.idea/
+*.iml
+*.iws
+
+# Android
+app/bss_app2/android/.gradle/
+app/bss_app2/android/local.properties
+app/bss_app2/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# iOS (generated)
+app/bss_app2/ios/Flutter/Generated.xcconfig
+app/bss_app2/ios/Flutter/ephemeral/
+app/bss_app2/ios/Flutter/flutter_export_environment.sh
+app/bss_app2/ios/Runner/GeneratedPluginRegistrant.*
+
+# APK / build outputs
+*.apk
+*.aab
