@@ -1,0 +1,63 @@
+(function tickByIds(){
+  const IDS = `
+1123310885664325632 1123285007072886784 1123255099767259136 1123232818928156672 1123226398389567488
+1123212653042991104 1123204672805011456 1123166931680362496 1123166918300532736 1123135992247222272
+1123074727255343104 1123066026326884352 1123066013462953984 1123066002466799616 1123024908910460928
+1123024485738741760 1123024087602823168 1123024084831698944 1122991762778488832 1122991761520197632
+1122981526838312960 1122981524271398912 1122981515200430080 1122978174259822592 1122975978232610816
+1122950586155270144 1122808953949257728 1122671431261618176 1122662125060620288 1122650189888487424
+1122643569560387584 1122643234154479616 1122642697522642944 1122642602832035840 1122619965679337472
+1122571477871624192 1122529565036642304 1122465084856205312 1122460983120494592 1122460263552253952
+1122458836972994560 1122458776572657664 1122458651100053504 1122458567795146752 1122458339956359168
+1122419798282993664 1122326131111231488 1122294883055697920 1122294879972884480 1122294876944596992
+1122291616684572672 1122277971504529408 1122268256424558592 1122258002194333696 1122257995626053632
+1122237499484274688 1122237488524558336 1122163265768652800 1121942526035886080 1121642810821443584
+1121573636269277184 1121535808567115776 1121472696048549888 1121456597613543424 1121380648156528640
+1121268102783172608 1120889195856789504 1120889190181896192 1120889180007170048 1120889161128607744
+1120889128815689728 1120889114831224832 1120860851082362880 1120845457663721472 1120742905676824576
+1120392012309069824 1120114155359961088 1119945878862692352 1119658712355438592 1119060322500608000
+1117498645699231744 1114970713216516096
+`;
+  const targets = new Set(IDS.split(/\s+/).map(s=>s.trim()).filter(Boolean));
+
+  function findAppDoc(win){
+    try { if (win.document.querySelector('.el-table__row, .el-table tbody tr')) return win.document; } catch(e){}
+    let frames;
+    try { frames = win.frames; } catch(e){ frames = null; }
+    if (frames){
+      for (let i=0; i<frames.length; i++){
+        try { const d=findAppDoc(frames[i]); if(d) return d; } catch(e){}
+      }
+    }
+    return null;
+  }
+  const doc = findAppDoc(window) || document;
+
+  let rows = [...doc.querySelectorAll('.el-table__body-wrapper tbody tr, .el-table__body tbody tr')];
+  if (!rows.length) rows = [...doc.querySelectorAll('tr')];
+
+  const done = new Set();
+  let ticked=0, already=0;
+  rows.forEach(row=>{
+    const text = row.textContent || '';
+    let hit=null;
+    for (const id of targets){ if (text.includes(id)){ hit=id; break; } }
+    if (!hit || done.has(hit)) return;
+
+    const cb = row.querySelector('td.el-table-column--selection .el-checkbox')
+            || row.querySelector('.el-checkbox')
+            || row.querySelector('input[type=checkbox]');
+    if (!cb) return;
+
+    if (cb.classList && cb.classList.contains('is-disabled')){ done.add(hit); return; }
+    if (cb.classList && cb.classList.contains('is-checked')){ already++; done.add(hit); return; }
+    if (cb.checked === true){ already++; done.add(hit); return; }
+
+    (cb.querySelector ? (cb.querySelector('.el-checkbox__inner')||cb) : cb).click();
+    done.add(hit); ticked++;
+  });
+
+  const notFound = [...targets].filter(id=>!done.has(id));
+  console.log(`✅ Tick mới: ${ticked} | Đã sẵn tick: ${already} | Khớp: ${done.size}/${targets.size}`);
+  if (notFound.length) console.log(`⚠️ Không thấy trên màn hình (${notFound.length}):\n`+notFound.join('\n'));
+})();
