@@ -215,13 +215,20 @@ RC-0X6P0WNPN0I9K
 RC-D96344W7YWFGME
 RC-PXOKEK1757U75
 RC-WOL2DWQG2PTD60
-
 `;
   const wantRC = [...new Set(RAW.split(/\s+/).map(s=>s.trim()).filter(Boolean))];
 
   const CFG = { cctsTicketName:'EV', cctsTicketOwnerName:'dinh',
     createStartTime:'2026-05-31 17:00:00', createStopTime:'2026-06-30 17:00:00',
     ticketStatus:['Pending for local team close'], pageSize:100 };
+
+  // ===== ĐIỀU KIỆN TỰ ĐÓNG (sửa cho đúng nghiệp vụ) =====
+  // 1) Mã lỗi thuộc nhóm "tự clear" — THÊM/BỚT mã ở đây:
+  const SELF_CLEAR_CODES = ['A0112','CONNECTION_LOST'];  // A0112 = Open door; thêm vd 'C2405','C0410'...
+  // 2) Solution phải xác nhận trụ bình thường (tự khỏi). Khớp 1 trong các từ khoá:
+  const SOLUTION_OK_RE = /bình thường|hoạt động bình thường|tự (hồi|khôi phục|clear|recover)/i;
+  // (Ngoài ra: phải ontime slaTimeout=0 + KHÔNG gắn spare part — script tự kiểm.)
+
   const URL='https://cloud.cnpowercore.com:8091/ccts/cctsTicket/findCCTSTicket';
 
   window.__cctsToken=window.__cctsToken||'';
@@ -261,9 +268,10 @@ RC-WOL2DWQG2PTD60
       if(!res.ok) return res0;
       const d=await res.json(); const list=(d&&d.data&&d.data.list)||[];
       const good=[], broken=[], files=[];
+      const filesOf=m=>{ const u=[]; if(m.imageUrl) u.push(m.imageUrl); (m.attachments||[]).forEach(a=>{ if(a&&a.url) u.push(a.url); }); return u; };
       list.forEach(r=>{
-        (r.goodMaterialList||[]).forEach(m=>{ good.push(`${m.name}${m.model?' ('+m.model+')':''} x${m.count||1}`); if(m.imageUrl) files.push(m.imageUrl); });
-        (r.brokenMaterialList||[]).forEach(m=>{ broken.push(`${m.name}${m.model?' ('+m.model+')':''} x${m.count||1}`); if(m.imageUrl) files.push(m.imageUrl); });
+        (r.goodMaterialList||[]).forEach(m=>{ good.push(`${m.name}${m.model?' ('+m.model+')':''} x${m.count||1}`); filesOf(m).forEach(u=>files.push(u)); });
+        (r.brokenMaterialList||[]).forEach(m=>{ broken.push(`${m.name}${m.model?' ('+m.model+')':''} x${m.count||1}`); filesOf(m).forEach(u=>files.push(u)); });
       });
       const uniqFiles=[...new Set(files)];
       const parts=[ good.length?('Lắp: '+good.join('; ')):'', broken.length?('Tháo: '+broken.join('; ')):'' ].filter(Boolean).join(' | ');
@@ -286,7 +294,7 @@ RC-WOL2DWQG2PTD60
       let pageNum=1,total=Infinity,n=0;
       while(n<total){ let d; try{d=await fetchPage(pageNum);}catch(e){console.error('Lỗi trang '+pageNum+': '+e.message);break;}
         const data=d.data||{};total=Number(data.total||0);const list=data.list||[];
-        list.forEach(t=>{ if(t.thirdTicketId) map[t.thirdTicketId]={rc:t.thirdTicketId,cctsTicketId:String(t.cctsTicketId),cctsTicketPk:String(t.cctsTicketPk),errorCode:t.errorCode||'',errorName:t.errorName||'',stationCode:t.stationCode||''}; });
+        list.forEach(t=>{ if(t.thirdTicketId) map[t.thirdTicketId]={rc:t.thirdTicketId,cctsTicketId:String(t.cctsTicketId),cctsTicketPk:String(t.cctsTicketPk),errorCode:t.errorCode||'',errorName:t.errorName||'',stationCode:t.stationCode||'',slaTimeout:Number(t.slaTimeout||0)}; });
         n+=list.length; console.log(`  trang ${pageNum}: +${list.length} (${n}/${total})`);
         if(!list.length)break; pageNum++; if(pageNum>50)break;
       }
