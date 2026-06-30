@@ -25,9 +25,14 @@
   let ticked=0, already=0, disabled=0;
 
   rows.forEach(row=>{
-    const keys = new Set((row.textContent.match(/\d{19,25}/g)||[]).map(s=>s.slice(-19)));
-    let hitId=null;
-    for (const k of keys){ if (targets.has(k)){ hitId=k; break; } }
+	let hitId=null;
+    const nums = row.textContent.match(/\d{17,25}/g) || [];
+    for (const raw of nums){
+      const dn = Number(raw);
+      const hit = IDS.find(t => t===raw || Math.abs(Number(t)-dn) <= 512);
+      if (hit){ hitId = hit; break; }
+    }
+	
     if (!hitId || status.has(hitId)) return;
 
     const cb = row.querySelector('td.el-table-column--selection .el-checkbox')
