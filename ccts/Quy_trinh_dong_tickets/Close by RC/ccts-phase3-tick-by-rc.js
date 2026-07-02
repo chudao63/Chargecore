@@ -1,25 +1,35 @@
 /* =========================================================
    CCTS — PHASE 3: Tick các dòng theo RC rồi đóng tay
    Chạy ở trang CCTS, màn LIST ticket (đặt page size 100/200 để cả nhóm 1 trang).
-   F12 -> Console -> dán list RC 1 nhóm vào RAW -> dán cả file -> Enter.
+   F12 -> Console -> dán cả file -> Enter -> 1 hộp thoại hiện ra, dán list RC 1 nhóm vào đó -> bấm Chạy.
    Khớp theo CHUỖI RC trong dòng (không dính làm tròn số). Chạy lại an toàn.
    Yêu cầu: list phải HIỂN THỊ cột chứa RC (thirdTicketId). Nếu báo "không thấy"
    hàng loạt -> list chưa bật cột RC (xem ghi chú cuối chat).
    ========================================================= */
-(function tickByRC(){
-  // ---- DÁN LIST RC 1 NHÓM (từ PHASE 2 / Excel) ----
-  const RAW = `
-
-RC-L3L36E0RR7CY7
-RC-QWJ2WQPJNKA14X
-RC-0X6OXM35YKTQ2E
-RC-R1D14LNXYYSGY
-RC-5NJQ0OW5ODTO
-RC-WOLM0LD9Y2CD21
-RC-0X6QDRL4WGTQ7O
-
-`;
+(async function tickByRC(){
+  // ---- Hộp thoại dán list RC 1 nhóm (giữ code không đổi qua các lần chạy, git không báo diff) ----
+  function pasteModal(title, hint){
+    return new Promise(resolve=>{
+      const ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;';
+      ov.innerHTML=`<div style="background:#fff;padding:20px;border-radius:8px;width:420px;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,.3);">
+        <div style="font-weight:bold;margin-bottom:8px;">${title}</div>
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">${hint}</div>
+        <textarea id="__pasteArea" style="width:100%;height:220px;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;" placeholder="Dán danh sách RC vào đây, mỗi dòng 1 mã..."></textarea>
+        <div style="margin-top:12px;text-align:right;">
+          <button id="__pasteCancel" style="margin-right:8px;padding:6px 14px;cursor:pointer;">Huỷ</button>
+          <button id="__pasteOk" style="padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">Chạy</button>
+        </div></div>`;
+      document.body.appendChild(ov);
+      const area=ov.querySelector('#__pasteArea'); area.focus();
+      ov.querySelector('#__pasteOk').onclick=()=>{ const v=area.value; document.body.removeChild(ov); resolve(v); };
+      ov.querySelector('#__pasteCancel').onclick=()=>{ document.body.removeChild(ov); resolve(null); };
+    });
+  }
+  const RAW = await pasteModal('PHASE 3 — Dán list RC 1 nhóm', 'Dán danh sách RC của 1 nhóm (lấy từ Phase 2), rồi bấm Chạy.');
+  if(RAW===null){ console.warn('⏹ Đã huỷ — không có dữ liệu.'); return; }
   const IDS = [...new Set(RAW.split(/\s+/).map(s=>s.trim()).filter(Boolean))];
+  if(!IDS.length){ console.warn('⚠️ Danh sách rỗng — không có RC nào.'); return; }
   const targets = new Set(IDS);
 
   function findAppDoc(win){

@@ -1,171 +1,35 @@
 /* =========================================================
    VOMS — PHASE 1: Quét trạng thái theo RC
    Chạy ở trang VOMS (voms.vgreen.net), đã đăng nhập.
-   F12 -> Console -> dán list RC vào RAW -> dán cả file -> Enter.
+   F12 -> Console -> dán cả file -> Enter -> 1 hộp thoại hiện ra, dán list RC vào đó -> bấm Chạy.
    Bước trước đó: search thử 1 ticket trên VOMS 1 lần để script bắt được token.
    Kết quả: lọc RC "Đóng" + auto-copy list RC đã đóng (dán sang PHASE 2).
    Dừng giữa chừng: window.__scanStop = true
    ========================================================= */
 (async () => {
-  // ---- DÁN LIST RC (mỗi dòng 1 cái) — từ PHASE 0 ----
-  const RAW = `
-RC-NQOXNQQEN3S9QQ
-RC-QWJLDE2GOOB12G
-RC-M5O7LO3PGPUM3L
-RC-WOL07P4GEMIDDM
-RC-0X6XJE92G7FQWN
-RC-XR2R07R09OTY0R
-RC-XR2RLWQG6ESYPP
-RC-6EJE4G1E1JUXD
-RC-NQOQQ0GOORU9X7
-RC-5NJNQ2Y62KF7K
-RC-QWJQP39G32HP5
-RC-L3L3NJYDXKT2X
-RC-D96Q201P1PFOR
-RC-M5O5PP0Y35AMD0
-RC-9404P9YEQQH5MX
-RC-GO5OLXM3OQIPEE
-RC-XR2RWE0012SY31
-RC-R1D1DL0GQOTL2
-RC-7OJXE3397GCRK
-RC-O7O39OE01DH5MM
-RC-JPK991GYEDB0PK
-RC-M5OMMN5LN6B93
-RC-EN97XLDPD2IWKO
-RC-YRODX443PMSDK
-RC-GO5WR9033KS6X
-RC-JPK9G47OP6H0O0
-RC-L3LGONEM0JT163
-
-
-RC-YRODO91XM3BMR
-RC-GO5W5YO1YLU27
-RC-0X64W5NGO6IX3
-RC-M5OP7021DXI1E
-RC-O7O3RK0J76F62
-RC-L3LG9WD03EC6P
-RC-R1DMKYR64RI4W
-RC-XR2MKLKMK3U6E
-RC-QWJMG6311LC76
-RC-QWJQ4R93G1UX9
-RC-M5OPQ9Q74XFM0W
-RC-WOL9YYO20XCE3
-RC-JPLMGW3P3OHM6
-RC-3L7N2D40MDF4GN
-RC-0XW499MQL6TYR
-RC-YRO041RRY2FM7
-RC-K6Q0X3M4O2H77
-RC-0X6O7JPEXQB54
-RC-XR2N4XEYP5FYYO
-RC-6EJOEERL4JU24X
-RC-NQO6QYPGX1C4Y
-RC-1W5O14ELW2IEY
-RC-GO51W4PRXYIDW
-RC-K6Q0OGDMGDCO2J
-RC-215O31J97WF1E4
-
-RC-2152G56W7OI0L
-RC-QWJQ7E21E3H1X3
-RC-YRO0W7QK3WSDDQ
-RC-GO51PY4MN6APWO
-RC-EN9X9J0OLETWJ1
-RC-EN9D2LOQPOHO7
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-RC-JPKRODD12PF02X
-RC-D96RWER6X5BQ4
-RC-XR2740RM3QF5P
-RC-NQP6KMXLX4T9PL
-RC-6EJ97D736YSDD
-RC-YROX244MKWADXM
-RC-215G2OKL69S6R
-RC-215G950OR9C1LP
-RC-XR27YQ5J30UPD
-RC-7OJ09240XJHYW
-RC-4G71J4X107U1LD
-
-
-RC-JPKR24G7RPF01J
-RC-K6QRDP79OOAY5
-RC-M5ORDN5EGXFLQ
-
-RC-JPKRWDD65OI0DQ
-RC-XR272R3OP3HP0
-RC-PXOY7P3KROAOP6
-RC-R1DRE63OY2C51
-RC-PXORL039DOF7X
-RC-GO5RYMMMQPBPEP
-RC-GO5L3QG4EQHP20
-
-
-RC-0X6KR4QM6LF6X
-RC-940KR55X01T7E
-RC-4G7KRNN03GA66
-RC-GO5L4LKLDOCQ5
-RC-6EJKEE3R0MS2MD
-RC-EN9WNOY172UWK
-RC-0X6KQLY31PBQM0
-RC-2152GMYE56CP0
-RC-M5OGJYKWJ9SQP
-RC-JPKYJ5MO4NA0O5
-RC-K6QM49ELWMTY6
-RC-0X6K6KN9YDTJJ
-RC-D96XJEOLR9IGKQ
-RC-WOLGYL2W3XCDP1
-RC-3LNKN9X91EFXJ
-RC-XR2DJRG94JSP9
-RC-3LN91M22KDI4X2
-RC-4G7J6X770QUPQ
-RC-5NJM49JO1JUQR
-RC-WOLWKOENM1HD0W
-RC-K6QOY630JEUJ3
-RC-6EJME05G4QSEJ
-
-RC-WOLW1D42E0B5O
-RC-1W59K0KR93FW94
-RC-WOLG6E69EWFX3
-RC-5NJM1RG5QNI142
-RC-3LN9NOON25FOP
-RC-EN9MG1DMYJFYE
-RC-GO5JP9NMJ5F4E
-RC-215952ERJ1T2M
-RC-QWJR53D702H17D
-RC-2159MEK9JLC15Y
-RC-WOLGXP27EESDL2
-RC-1W59YEPYW9SR3
-RC-1W59J02267AJQ
-RC-K6QO6WJNO0SE4
-RC-7OJ95Y57DQA39
-RC-GO5NG77550IPK0
-RC-L3LNW91NNGFEG
-RC-O7O4PD9015S596
-RC-R1D31ON79LCD
-RC-PXOPXNQOD5CGM
-RC-WOLWMMX731SDYX
-RC-215L6ORP0GCMQ
-
-RC-M5ON4501YGC9X
-RC-0X6P0WNPN0I9K
-RC-D96344W7YWFGME
-RC-940E97DQ1EANN
-RC-WOL2DWQG2PTD60
-`;
+  // ---- Hộp thoại dán list RC (giữ code không đổi qua các lần chạy, git không báo diff) ----
+  function pasteModal(title, hint){
+    return new Promise(resolve=>{
+      const ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;';
+      ov.innerHTML=`<div style="background:#fff;padding:20px;border-radius:8px;width:420px;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,.3);">
+        <div style="font-weight:bold;margin-bottom:8px;">${title}</div>
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">${hint}</div>
+        <textarea id="__pasteArea" style="width:100%;height:220px;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;" placeholder="Dán danh sách RC vào đây, mỗi dòng 1 mã..."></textarea>
+        <div style="margin-top:12px;text-align:right;">
+          <button id="__pasteCancel" style="margin-right:8px;padding:6px 14px;cursor:pointer;">Huỷ</button>
+          <button id="__pasteOk" style="padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">Chạy</button>
+        </div></div>`;
+      document.body.appendChild(ov);
+      const area=ov.querySelector('#__pasteArea'); area.focus();
+      ov.querySelector('#__pasteOk').onclick=()=>{ const v=area.value; document.body.removeChild(ov); resolve(v); };
+      ov.querySelector('#__pasteCancel').onclick=()=>{ document.body.removeChild(ov); resolve(null); };
+    });
+  }
+  const RAW = await pasteModal('PHASE 1 — Dán list RC', 'Dán danh sách RC (mỗi dòng 1 mã) lấy từ Phase 0, rồi bấm Chạy.');
+  if(RAW===null){ console.warn('⏹ Đã huỷ — không có dữ liệu.'); return; }
   const IDS = [...new Set(RAW.split(/\s+/).map(s=>s.trim()).filter(Boolean))];
+  if(!IDS.length){ console.warn('⚠️ Danh sách rỗng — không có RC nào.'); return; }
 
   const API = 'https://voms-api.vgreen.net/api/v1/repair-cases';
   const RETRIES = 3, RETRY_WAIT = 1500, DELAY = 200;

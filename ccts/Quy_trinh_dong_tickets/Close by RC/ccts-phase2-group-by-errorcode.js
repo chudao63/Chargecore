@@ -1,37 +1,35 @@
 /* =========================================================
    CCTS — PHASE 2: Nhóm RC đã đóng theo errorCode
    Chạy ở trang CCTS (console.cnpowercore.com), đã đăng nhập.
-   F12 -> Console -> dán list RC ĐÃ ĐÓNG vào RAW -> dán cả file -> Enter.
+   F12 -> Console -> dán cả file -> Enter -> 1 hộp thoại hiện ra, dán list RC ĐÃ ĐÓNG vào đó -> bấm Chạy.
      - Nếu vừa chạy PHASE 0 cùng tab: tự dùng lại window.__cctsTable (nhanh).
      - Nếu không: search list 1 lần (bắt token) rồi gõ:  groupByErr()
    Output: in list RC từng nhóm errorCode + Excel nhiều sheet (mỗi mã 1 sheet).
    ========================================================= */
-(function(){
-  // ---- DÁN LIST RC ĐÃ ĐÓNG (từ PHASE 1) ----
-  const RAW = `
-RC-6EJ7D73RGGS07
-RC-L3L45XW1QGH1RM
-----
-RC-XR2MX5EM69AYP6
-RC-6EJ71M5RKRI2P7
-RC-M5OP5KRW4QCE2
-RC-GO51RW2M25TJE
-RC-3LNJD9160PS4P5
-RC-6EJOJ0OER0UPY
-RC-O7OGRRGG7LFJ3
-RC-1W57L225K0IXQ
-RC-EN9DM24DKEHRQ
-RC-QWJYJN73NDI0R
-RC-NQOYM790N4H2W
-RC-K6QMMDX9RMFD
-RC-21523GWRGDH1E9
-RC-0X6L6NXDD7TJP
-RC-QWJPXYE1QJU6L
-RC-O7OEKR4RJ3CY5
-
-
-`;
+(async function(){
+  // ---- Hộp thoại dán list RC đã đóng (giữ code không đổi qua các lần chạy, git không báo diff) ----
+  function pasteModal(title, hint){
+    return new Promise(resolve=>{
+      const ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999999;display:flex;align-items:center;justify-content:center;font-family:sans-serif;';
+      ov.innerHTML=`<div style="background:#fff;padding:20px;border-radius:8px;width:420px;max-width:90vw;box-shadow:0 4px 20px rgba(0,0,0,.3);">
+        <div style="font-weight:bold;margin-bottom:8px;">${title}</div>
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">${hint}</div>
+        <textarea id="__pasteArea" style="width:100%;height:220px;box-sizing:border-box;font-family:monospace;font-size:12px;padding:8px;" placeholder="Dán danh sách RC vào đây, mỗi dòng 1 mã..."></textarea>
+        <div style="margin-top:12px;text-align:right;">
+          <button id="__pasteCancel" style="margin-right:8px;padding:6px 14px;cursor:pointer;">Huỷ</button>
+          <button id="__pasteOk" style="padding:6px 14px;background:#2563eb;color:#fff;border:none;border-radius:4px;cursor:pointer;">Chạy</button>
+        </div></div>`;
+      document.body.appendChild(ov);
+      const area=ov.querySelector('#__pasteArea'); area.focus();
+      ov.querySelector('#__pasteOk').onclick=()=>{ const v=area.value; document.body.removeChild(ov); resolve(v); };
+      ov.querySelector('#__pasteCancel').onclick=()=>{ document.body.removeChild(ov); resolve(null); };
+    });
+  }
+  const RAW = await pasteModal('PHASE 2 — Dán list RC đã đóng', 'Dán danh sách RC đã "Đóng" (lấy từ Phase 1), rồi bấm Chạy.');
+  if(RAW===null){ console.warn('⏹ Đã huỷ — không có dữ liệu.'); return; }
   const wantRC = [...new Set(RAW.split(/\s+/).map(s=>s.trim()).filter(Boolean))];
+  if(!wantRC.length){ console.warn('⚠️ Danh sách rỗng — không có RC nào.'); return; }
 
   const CFG = { cctsTicketName:'EV', cctsTicketOwnerName:'dinh',
     createStartTime:'2026-05-31 17:00:00', createStopTime:'2026-06-30 17:00:00',
