@@ -158,8 +158,8 @@ RC-O7OEKR4RJ3CY5
       XLSX.utils.book_append_sheet(wb,ws,safe(k));
     });
     if(notFound.length){const nf=[['RC']];notFound.forEach(rc=>nf.push([rc]));XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(nf),'KHONG_THAY');}
-    XLSX.writeFile(wb,'ccts-nhom-loi.xlsx');
-    console.log('📄 Đã xuất ccts-nhom-loi.xlsx (mỗi errorCode 1 sheet, cột RC để dán Phase 3).');
+    XLSX.writeFile(wb,'output_phase2_group_by_errorcode.xlsx');
+    console.log('📄 Đã xuất output_phase2_group_by_errorcode.xlsx (mỗi errorCode 1 sheet, cột RC để dán Phase 3).');
   };
 
   // Tự chạy nếu đã có __cctsTable; không thì chờ gọi tay sau khi bắt token

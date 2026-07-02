@@ -88,8 +88,8 @@
     rows.forEach((_,r)=>{ if(r>0)['B','C'].forEach(c=>{const cell=ws[c+(r+1)];if(cell)cell.t='s';}); }); // ID/PK = Text
     ws['!cols']=[{wch:18},{wch:22},{wch:22},{wch:16},{wch:30},{wch:12},{wch:16},{wch:12}];
     const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'CCTS_list');
-    XLSX.writeFile(wb,'ccts-list-rc.xlsx');
-    console.log('📄 Đã xuất ccts-list-rc.xlsx');
+    XLSX.writeFile(wb,'output_phase0_dump_rc.xlsx');
+    console.log('📄 Đã xuất output_phase0_dump_rc.xlsx');
     console.log('➡️ Bước tiếp: list RC đã ở clipboard — sang VOMS chạy PHASE 1.');
   };
 

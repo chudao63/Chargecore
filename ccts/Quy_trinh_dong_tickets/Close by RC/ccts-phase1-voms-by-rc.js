@@ -248,7 +248,7 @@ RC-WOL2DWQG2PTD60
     Object.keys(byStatus).sort((a,b)=>byStatus[b].length-byStatus[a].length).forEach(k=>sum.push([k,byStatus[k].length]));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sum),'Tong_hop');
     const ts=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
-    XLSX.writeFile(wb,`voms-status-${ts}.xlsx`);
-    console.log(`📄 Đã xuất voms-status-${ts}.xlsx`);
+    XLSX.writeFile(wb,`output_phase1_voms_by_rc_${ts}.xlsx`);
+    console.log(`📄 Đã xuất output_phase1_voms_by_rc_${ts}.xlsx`);
   }catch(e){ console.warn('Không xuất được Excel: '+(e.message||e)); }
 })();
