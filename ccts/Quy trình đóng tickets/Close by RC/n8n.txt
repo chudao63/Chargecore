@@ -1,0 +1,73 @@
+{
+  "name": "CCTS - lọc ticket tự đóng (RC)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "n_trigger",
+      "name": "Bấm chạy",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===== DÁN CREDENTIAL HIỆN TẠI VÀO ĐÂY =====\n// Lấy từ DevTools khi đang đăng nhập (xem hướng dẫn). Hết hạn thì dán lại.\nreturn [{ json: {\n  // --- CCTS ---\n  cctsCookie : 'PASTE_GIA_TRI_ssoticket',          // chỉ phần value của cookie ssoticket\n  cctsToken  : 'PASTE_token_CCTS',                  // field token trong body request CCTS\n\n  // --- VOMS ---\n  vomsAuth   : 'Bearer PASTE_JWT_VOMS',             // nguyên chuỗi 'Bearer eyJ...'\n  vomsTenant : 'PASTE_X_Tenant_Id',                // header X-Tenant-Id\n\n  // --- Bộ lọc list CCTS (giống lúc lọc tay) ---\n  name  : 'EV',\n  owner : 'dinh',\n  start : '2026-05-31 17:00:00',\n  stop  : '2026-06-30 17:00:00',\n\n  // --- Điều kiện tự đóng ---\n  selfClearCodes : ['A0112','CONNECTION_LOST'],     // mã lỗi tự clear; thêm/bớt tuỳ ý\n  solutionOk     : 'bình thường|hoạt động bình thường|tự (hồi|khôi phục|clear|recover)'\n}}];\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "n_config",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ====== PIPELINE: list CCTS -> VOMS -> Solution + spare -> chấm điều kiện ======\nconst cfg = $('Config').first().json;\nconst http = (o) => this.helpers.httpRequest(o);\nconst sleep = (ms) => new Promise(r => setTimeout(r, ms));\nconst okRe = new RegExp(cfg.solutionOk, 'i');\nconst selfClear = (cfg.selfClearCodes || []).map(s => String(s).toUpperCase());\nconst CH = {\n  'content-type': 'application/json;charset=UTF-8',\n  'accept': 'application/json, text/plain, */*',\n  'cookie': 'ssoticket=' + cfg.cctsCookie\n};\n\n// 1) Lấy toàn bộ list CCTS \"Pending for local team close\"\nasync function cctsList() {\n  const out = []; let pageNum = 1, total = Infinity;\n  while (out.length < total) {\n    const d = await http({\n      method: 'POST',\n      url: 'https://cloud.cnpowercore.com:8091/ccts/cctsTicket/findCCTSTicket',\n      headers: CH, json: true,\n      body: { page: { pageNum, pageSize: 100 }, timezoneOffset: 420,\n        cctsTicketName: cfg.name, cctsTicketOwnerName: cfg.owner,\n        createStartTime: cfg.start, createStopTime: cfg.stop,\n        ticketStatus: ['Pending for local team close'], slaTimeout: '0', token: cfg.cctsToken }\n    });\n    const data = d.data || {}; total = Number(data.total || 0);\n    const list = data.list || [];\n    for (const t of list) {\n      if (!t.thirdTicketId) continue;\n      out.push({ rc: t.thirdTicketId, pk: String(t.cctsTicketPk), id: String(t.cctsTicketId),\n        errorCode: t.errorCode || '', errorName: t.errorName || '',\n        station: t.stationCode || '', slaTimeout: Number(t.slaTimeout || 0) });\n    }\n    if (!list.length) break; pageNum++; if (pageNum > 50) break;\n  }\n  return out;\n}\n\n// 2) VOMS đã đóng?\nasync function vomsClosed(rc) {\n  try {\n    const d = await http({ method: 'GET', url: 'https://voms-api.vgreen.net/api/v1/repair-cases',\n      qs: { page: 1, limit: 10, search: rc }, json: true,\n      headers: { Authorization: cfg.vomsAuth, 'X-Tenant-Id': cfg.vomsTenant, Accept: 'application/json, text/plain, */*' } });\n    const items = (d && d.data && d.data.items) || [];\n    const it = items.find(x => x.code === rc) || items[0];\n    return it ? String(it.status || '').toLowerCase() === 'closed' : false;\n  } catch (e) { return false; }\n}\n\n// 3a) Solution (đọc text + regex, giữ chính xác)\nasync function solution(pk) {\n  try {\n    const body = await http({ method: 'POST',\n      url: 'https://cloud.cnpowercore.com:8091/ccts/cctsTicketSolution/findCCTSTicketSolution',\n      headers: CH, json: false,\n      body: { cctsTicketPk: String(pk), page: { pageNum: 1, pageSize: 50 }, token: cfg.cctsToken } });\n    const s = typeof body === 'string' ? body : JSON.stringify(body);\n    const re = /\"cctsTicketSolutionContent\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"/g;\n    const out = []; let m;\n    while ((m = re.exec(s))) { try { out.push(JSON.parse('\"' + m[1] + '\"')); } catch (e) { out.push(m[1]); } }\n    return out.filter(Boolean).join(' ||| ');\n  } catch (e) { return ''; }\n}\n\n// 3b) Spare parts: đếm vật tư + file đính kèm (chỉ attachments, KHÔNG tính imageUrl)\nasync function spare(pk) {\n  try {\n    const d = await http({ method: 'POST',\n      url: 'https://cloud.cnpowercore.com:8091/ccts/chargeBoxMaterialUsageRecord/getRecordList',\n      headers: CH, json: true,\n      body: { ticketPk: String(pk), page: { pageNum: 1, pageSize: 50 }, token: cfg.cctsToken } });\n    const list = (d && d.data && d.data.list) || [];\n    let partsN = 0; const fileUrls = []; const names = [];\n    list.forEach(r => {\n      ['goodMaterialList', 'brokenMaterialList'].forEach(key => {\n        (r[key] || []).forEach(mm => {\n          partsN++; names.push(mm.name);\n          (mm.attachments || []).forEach(a => { if (a && a.url) fileUrls.push(a.url); });\n        });\n      });\n    });\n    return { partsN, fileN: new Set(fileUrls).size, parts: [...new Set(names)].join('; ') };\n  } catch (e) { return { partsN: 0, fileN: 0, parts: '' }; }\n}\n\n// ====== chạy ======\nconst tickets = await cctsList();\nconst out = [];\nfor (const t of tickets) {\n  const closed = await vomsClosed(t.rc); await sleep(120);\n  let sol = '', sp = { partsN: 0, fileN: 0, parts: '' };\n  if (closed) { sol = await solution(t.pk); await sleep(80); sp = await spare(t.pk); await sleep(80); }\n\n  const reasons = [];\n  if (!closed) reasons.push('VOMS chưa đóng');\n  if (!selfClear.includes(String(t.errorCode).toUpperCase())) reasons.push('mã lỗi không thuộc nhóm tự clear');\n  if (t.slaTimeout !== 0) reasons.push('quá hạn (không ontime)');\n  if (sp.partsN > 0) reasons.push('có gắn spare part');\n  if (!okRe.test(sol)) reasons.push('solution chưa xác nhận bình thường');\n  const auto = reasons.length === 0;\n\n  out.push({ json: {\n    loai: auto ? 'TU_DONG' : 'XEM_TAY',\n    rc: t.rc, errorCode: t.errorCode, errorName: t.errorName, station: t.station,\n    cctsTicketId: t.id, vomsClosed: closed, ontime: t.slaTimeout === 0,\n    vatTu: sp.parts, soSpare: sp.partsN, soFile: sp.fileN,\n    solution: sol, lyDo: reasons.join('; ')\n  }});\n}\nout.sort((a, b) => (a.json.loai === b.json.loai ? 0 : (a.json.loai === 'TU_DONG' ? -1 : 1)));\nreturn out;\n",
+        "mode": "runOnceForAllItems"
+      },
+      "id": "n_pipeline",
+      "name": "Pipeline",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Bấm chạy": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

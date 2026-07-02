@@ -9,8 +9,15 @@
 (function tickByRC(){
   // ---- DÁN LIST RC 1 NHÓM (từ PHASE 2 / Excel) ----
   const RAW = `
-RC-M5O53JJO1EA3M
-RC-YRORP6DDW0F19
+
+RC-L3L36E0RR7CY7
+RC-QWJ2WQPJNKA14X
+RC-0X6OXM35YKTQ2E
+RC-R1D14LNXYYSGY
+RC-5NJQ0OW5ODTO
+RC-WOLM0LD9Y2CD21
+RC-0X6QDRL4WGTQ7O
+
 `;
   const IDS = [...new Set(RAW.split(/\s+/).map(s=>s.trim()).filter(Boolean))];
   const targets = new Set(IDS);

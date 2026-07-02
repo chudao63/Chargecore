@@ -1,0 +1,59 @@
+BỐI CẢNH & MONG MUỐN — Tự động hoá đóng ticket CCTS bằng n8n
+
+[Hệ thống]
+Tôi làm vận hành kỹ thuật trạm sạc xe điện. Có 2 hệ thống:
+- CCTS: quản lý support ticket. API base POST https://cloud.cnpowercore.com:8091/ccts/
+  Auth = cookie ssoticket (gửi credentials/cookie) + field "token" trong body. Cả 2 hết hạn theo phiên.
+- VOMS: quản lý repair-case. GET https://voms-api.vgreen.net/api/v1/repair-cases?page=1&limit=10&search=<RC>
+  Auth = header Authorization: Bearer <JWT> + X-Tenant-Id. search= là param lọc duy nhất.
+Khoá nối giữa 2 hệ thống = mã RC (field thirdTicketId bên CCTS, = field code bên VOMS), dạng "RC-xxxx".
+Lý do dùng RC làm khoá: ID số 19 chữ số (cctsTicketPk) bị Excel/JS làm tròn sai; RC là chuỗi nên an toàn.
+
+[Mục tiêu]
+Đóng hàng loạt các ticket CCTS đủ điều kiện. Một ticket TỰ ĐÓNG ĐƯỢC khi thoả ĐỦ:
+1. CCTS đang ở trạng thái "Pending for local team close"
+2. VOMS đã "Đóng" (status = closed)
+3. Ticket còn ontime (slaTimeout = 0, chưa quá hạn)
+4. errorCode thuộc nhóm lỗi tự clear (vd Open door = A0112, CONNECTION_LOST... — danh sách tôi tự định nghĩa)
+5. KHÔNG gắn spare part (nếu KTV có thay vật tư = sửa thật, phải tách ra xem tay)
+6. Solution xác nhận kiểu "trụ hoạt động bình thường..." (đúng loại tự khỏi)
+=> Ticket có spare part hoặc solution khác thường => tách "xem tay".
+
+[Luồng THỦ CÔNG đã test OK] (4 script console chạy trên trình duyệt, theo RC)
+- Phase 0 (CCTS): quét findCCTSTicket -> ra list RC + Excel.
+- Phase 1 (VOMS): dán list RC -> lọc RC "Đóng".
+- Phase 2 (CCTS): dán RC đã đóng -> nhóm theo errorCode, lấy thêm Solution + spare/file -> Excel nhiều sheet.
+- Phase 3 (CCTS DOM): dán RC 1 nhóm -> tick checkbox theo chuỗi RC -> tôi bấm Đóng bằng tay.
+
+[Mong muốn n8n]
+Chuyển phần ĐỌC + LỌC (Phase 0->1->2) thành 1 workflow n8n chạy 1 phát:
+lấy list CCTS -> hỏi VOMS từng RC -> lấy Solution + spare -> chấm 6 điều kiện -> xuất danh sách
+"TU_DONG" vs "XEM_TAY" (kèm lý do). n8n chạy server-side nên KHÔNG dính CORS, gọi được cả CCTS lẫn VOMS.
+Phần TICK + BẤM ĐÓNG tôi CHẤP NHẬN LÀM TAY (lấy list RC TU_DONG dán vào script Phase 3).
+
+[Vướng mắc chính: credential]
+n8n không có trình duyệt nên không tự bắt được token/ssoticket (CCTS) và Bearer/tenant (VOMS).
+Hướng hiện tại: dán tay 4 giá trị vào node Config trước mỗi lần chạy (chạy ~1 lần/ngày nên chấp nhận được).
+Hướng nâng cấp sau: (2) hook console tự POST token mới về webhook n8n; (3) n8n tự gọi API login lấy token.
+
+[API schema quan trọng]
+- CCTS findCCTSTicket (POST, paginated): body {page:{pageNum,pageSize:100}, timezoneOffset:420,
+  cctsTicketName, cctsTicketOwnerName, createStartTime, createStopTime,
+  ticketStatus:["Pending for local team close"], slaTimeout:"0", token}.
+  Response data.list[] + data.total. Mỗi ticket: cctsTicketPk(string=PK thật), cctsTicketId(string=ID hiển thị,
+  lossy), thirdTicketId(=RC), errorCode, errorName, cctsTicketStatus, stationCode, slaTimeout(0=ontime), ticketCreator.
+- CCTS findCCTSTicketSolution (POST): body {cctsTicketPk, page, token}. Field cctsTicketSolutionContent.
+- CCTS getRecordList (SPARE PARTS, POST): body {ticketPk(=cctsTicketPk), page, token}.
+  Response data.list[], mỗi record có goodMaterialList[] + brokenMaterialList[]; mỗi vật tư có:
+  name, model, count, imageUrl (= ảnh CATALOG vật tư, /aws/files/, KHÔNG phải file đính kèm),
+  attachments[]{url,fileName} (= file KTV upload thật, /aws/ccts/). => "có file đính kèm" CHỈ đếm attachments.
+- VOMS repair-cases (GET, search=RC): response data.items[], mỗi item có code(=RC), status(closed=Đóng), station.stationCode.
+
+[Lưu ý kỹ thuật]
+- Đọc cctsTicketPk/Id/thirdTicketId an toàn vì là string trong JSON; KHÔNG ép Number() lên cctsTicketId.
+- Đếm "số file spare" = chỉ attachments[].url (lọc trùng), bỏ imageUrl.
+
+[Đã build]
+Đã có file workflow n8n (3 node: Manual Trigger -> Config dán credential -> 1 Code node Pipeline làm hết
+list+VOMS+solution+spare+verdict, output mỗi RC kèm loai TU_DONG/XEM_TAY + lyDo). Dùng this.helpers.httpRequest.
+Cần: hoàn thiện/– kiểm thử workflow, và bàn hướng tự refresh credential.
